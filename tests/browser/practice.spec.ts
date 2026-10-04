@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 test.beforeEach(async ({ request }) => {
-  await request.delete("http://127.0.0.1:3001/api/progress");
+  await request.delete("/api/progress");
 });
 test("complete exercise, show feedback, update progress and start next", async ({
   page,

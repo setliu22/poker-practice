@@ -84,7 +84,7 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-On Linux, Playwright may require `npx playwright install --with-deps chromium`. Browser installation requires network access once; subsequent tests and normal practice are local. Browser tests use their own `data/browser-test.sqlite` database, clear it between cases, and start/stop both servers automatically. Stop an existing dev server before running them.
+On Linux, Playwright may require `npx playwright install --with-deps chromium`. Browser installation requires network access once; subsequent tests and normal practice are local. Browser tests use their own `data/browser-test.sqlite` database, clear it between cases, and start/stop both servers automatically. They use dedicated ports 5174 and 3002, so an existing app can keep running.
 
 Verified during delivery:
 
