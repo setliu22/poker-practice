@@ -9,5 +9,8 @@ export function openDatabase(
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   db.exec(readFileSync(resolve("apps/api/migrations/001_initial.sql"), "utf8"));
+  db.exec(
+    readFileSync(resolve("apps/api/migrations/002_bot_tables.sql"), "utf8"),
+  );
   return db;
 }

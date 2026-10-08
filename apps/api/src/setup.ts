@@ -1,4 +1,4 @@
 import { openDatabase } from "./database";
 const db = openDatabase();
 db.close();
-console.log("Poker Practice database initialized (migration 001).");
+console.log("Poker Practice database initialized (migrations 001–002).");

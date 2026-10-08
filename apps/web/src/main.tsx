@@ -9,44 +9,8 @@ import {
   type Progress as ProgressData,
 } from "../../../packages/shared/src/index";
 import "./styles.css";
-const suitInfo: Record<string, { symbol: string; name: string }> = {
-  c: { symbol: "♣", name: "clubs" },
-  d: { symbol: "♦", name: "diamonds" },
-  h: { symbol: "♥", name: "hearts" },
-  s: { symbol: "♠", name: "spades" },
-};
-const rankNames: Record<string, string> = {
-  A: "Ace",
-  K: "King",
-  Q: "Queen",
-  J: "Jack",
-  T: "10",
-};
-function Cards({
-  cards,
-  small = false,
-  highlighted = [],
-}: {
-  cards: string[];
-  small?: boolean;
-  highlighted?: string[];
-}) {
-  return (
-    <div className={`cards ${small ? "small" : ""}`}>
-      {cards.map((c) => (
-        <span
-          className={`card suit-${c[1]} ${highlighted.includes(c) ? "decisive" : ""}`}
-          key={c}
-          aria-label={`${rankNames[c[0]] ?? c[0]} of ${suitInfo[c[1]].name}${highlighted.includes(c) ? ", deciding rank" : ""}`}
-          role="img"
-        >
-          <span>{c[0] === "T" ? "10" : c[0]}</span>
-          <span>{suitInfo[c[1]].symbol}</span>
-        </span>
-      ))}
-    </div>
-  );
-}
+import { Cards } from "./Cards";
+import { BotPractice } from "./BotPractice";
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch("/api" + path, {
     ...options,
@@ -69,9 +33,9 @@ const descriptions: Record<Mode, string> = {
   decision: "Compare actions under stated assumptions.",
 };
 function App() {
-  const [page, setPage] = useState<"Practice" | "Progress" | "Reference">(
-    "Practice",
-  );
+  const [page, setPage] = useState<
+    "Practice" | "Bot table" | "Progress" | "Reference"
+  >("Practice");
   return (
     <>
       <a className="skip" href="#main">
@@ -85,22 +49,26 @@ function App() {
           <span>Poker Practice</span>
         </div>
         <nav aria-label="Main navigation">
-          {(["Practice", "Progress", "Reference"] as const).map((p) => (
-            <button
-              key={p}
-              aria-current={page === p ? "page" : undefined}
-              onClick={() => setPage(p)}
-            >
-              {p}
-            </button>
-          ))}
+          {(["Practice", "Bot table", "Progress", "Reference"] as const).map(
+            (p) => (
+              <button
+                key={p}
+                aria-current={page === p ? "page" : undefined}
+                onClick={() => setPage(p)}
+              >
+                {p}
+              </button>
+            ),
+          )}
         </nav>
         <span className="local-label">
           <span aria-hidden="true">●</span> Local learner
         </span>
       </header>
       <main id="main">
-        {page === "Practice" ? (
+        {page === "Bot table" ? (
+          <BotPractice />
+        ) : page === "Practice" ? (
           <Practice />
         ) : page === "Progress" ? (
           <Progress />
@@ -109,7 +77,7 @@ function App() {
         )}
       </main>
       <footer>
-        <span>Heads-up · No-limit Texas Hold’em · Stored on this device</span>
+        <span>No-limit Texas Hold’em · Stored on this device</span>
       </footer>
     </>
   );

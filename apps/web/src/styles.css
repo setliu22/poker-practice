@@ -1202,3 +1202,252 @@ footer {
     grid-template-columns: 1fr;
   }
 }
+.table-setup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.table-rules {
+  font-size: 12px;
+  color: var(--muted);
+  margin: -12px 0 24px;
+}
+.bot-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 270px;
+  gap: 24px;
+  align-items: start;
+}
+.bot-game {
+  min-width: 0;
+}
+.bot-board {
+  padding: 24px 0;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.bot-board h2 {
+  font-variant-numeric: tabular-nums;
+}
+.bot-seats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.bot-seat {
+  padding: 16px;
+  background: #0d1521;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  min-width: 0;
+}
+.hero-seat {
+  grid-column: span 2;
+  background: #142239;
+}
+.acting-seat {
+  border-color: #679fff;
+}
+.seat-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.seat-heading h3 {
+  margin: 0;
+}
+.bot-seat > .quiet {
+  margin: 4px 0 12px;
+}
+.dealer-badge {
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid #5d7390;
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: #c8d9f2;
+}
+.seat-status {
+  font-size: 11px;
+  margin: 10px 0 0;
+  color: #b5c8e3;
+}
+.folded-seat {
+  border-style: dashed;
+}
+.folded-seat .cards {
+  opacity: 0.6;
+}
+.payout {
+  font-size: 11px;
+  color: var(--accent);
+  margin: 6px 0 0;
+}
+.hidden-cards {
+  display: flex;
+  gap: 5px;
+}
+.hidden-cards span {
+  width: 34px;
+  height: 47px;
+  background: #1a2d49;
+  border: 1px solid #405676;
+  border-radius: 4px;
+}
+.table-actions,
+.table-review {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+.table-actions h2 {
+  margin: 0 0 10px;
+}
+.table-action-buttons {
+  display: flex;
+  gap: 12px;
+}
+.raise-controls {
+  margin-top: 20px;
+}
+.raise-controls label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.raise-controls > div {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.raise-controls input {
+  width: 130px;
+}
+.raise-controls small {
+  display: block;
+  margin-top: 8px;
+}
+.review-item {
+  border-bottom: 1px solid var(--border);
+  padding: 16px 0;
+}
+.review-item h3 {
+  margin: 0;
+}
+.review-item p:not(.eyebrow) {
+  font-size: 13px;
+  line-height: 1.8;
+  margin: 8px 0;
+}
+.table-review > .primary {
+  margin-top: 20px;
+}
+.hand-history {
+  max-height: 850px;
+  overflow: auto;
+}
+.hand-history ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.hand-history li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.hand-history li span {
+  display: block;
+}
+.hand-history li .quiet {
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+@media (max-width: 900px) {
+  .bot-layout {
+    grid-template-columns: 1fr;
+  }
+  .hand-history {
+    max-height: 350px;
+  }
+  .bot-seats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 650px) {
+  nav button {
+    padding: 9px 8px;
+    font-size: 12px;
+  }
+  .table-setup {
+    margin-top: 18px;
+    gap: 10px;
+  }
+  .table-setup label {
+    width: 100%;
+  }
+  .table-setup select {
+    flex: 1;
+    min-width: 0;
+  }
+  .bot-seats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bot-seat {
+    padding: 12px;
+  }
+  .table-rules {
+    font-size: 11px;
+    line-height: 1.8;
+  }
+  .bot-board .cards {
+    gap: 5px;
+  }
+  .bot-board .card {
+    width: 40px;
+    height: 60px;
+  }
+  .bot-layout {
+    gap: 18px;
+  }
+  .raise-controls input {
+    width: 100px;
+  }
+  .raise-controls .secondary {
+    padding: 10px;
+  }
+  .table-review h2 {
+    font-size: 21px;
+  }
+}
+.bot-showdown {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+.showdown-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.showdown-row strong {
+  font-size: 12px;
+  display: block;
+}
+.showdown-row .quiet {
+  display: block;
+  font-size: 10px;
+  margin-top: 5px;
+}
+@media (max-width: 650px) {
+  .showdown-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+}

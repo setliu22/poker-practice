@@ -11,9 +11,110 @@ import {
   type Progress,
 } from "../../../packages/shared/src/index";
 import { generate, grade, type Specification } from "./exercises";
+import {
+  tableCreateSchema,
+  tableActionSchema,
+  tableNextSchema,
+} from "../../../packages/shared/src/table";
+import {
+  createTable,
+  act,
+  runBots,
+  tableView,
+  type TableState,
+} from "../../../packages/poker/src/table";
 export function createApp(db: Database.Database) {
   const app = express();
   app.use(express.json({ limit: "32kb" }));
+  app.post("/api/tables", (req, res) => {
+    const { players } = tableCreateSchema.parse(req.body);
+    const state = runBots(
+      createTable(randomUUID(), players, randomInt(0, 4294967295)),
+    );
+    db.prepare("INSERT INTO bot_tables VALUES(?,?)").run(
+      state.id,
+      JSON.stringify(state),
+    );
+    res.status(201).json(tableView(state));
+  });
+  app.get("/api/tables/:id", (req, res) => {
+    const row = db
+      .prepare("SELECT state FROM bot_tables WHERE id=?")
+      .get(req.params.id) as { state: string } | undefined;
+    if (!row) {
+      res.status(404).json({ error: "Table not found. Start a new table." });
+      return;
+    }
+    res.json(tableView(JSON.parse(row.state)));
+  });
+  for (const route of ["actions", "next"] as const)
+    app.post(`/api/tables/:id/${route}`, (req, res) => {
+      const input =
+        route === "actions"
+          ? tableActionSchema.parse(req.body)
+          : tableNextSchema.parse(req.body);
+      const result = db.transaction(() => {
+        const saved = db
+          .prepare(
+            "SELECT response FROM bot_commands WHERE table_id=? AND action_id=?",
+          )
+          .get(req.params.id, input.actionId) as
+          { response: string } | undefined;
+        if (saved) return { status: 200, body: JSON.parse(saved.response) };
+        const row = db
+          .prepare("SELECT state FROM bot_tables WHERE id=?")
+          .get(req.params.id) as { state: string } | undefined;
+        if (!row)
+          return {
+            status: 404,
+            body: { error: "Table not found. Start a new table." },
+          };
+        let state: TableState = JSON.parse(row.state);
+        if (state.revision !== input.revision)
+          return {
+            status: 409,
+            body: {
+              error: "This table has changed. Reload its current state.",
+            },
+          };
+        try {
+          if (route === "next") {
+            if (!state.complete)
+              return {
+                status: 400,
+                body: { error: "Finish the current hand first." },
+              };
+            state = createTable(
+              state.id,
+              state.players.length,
+              randomInt(0, 4294967295),
+              state.dealer + 1,
+              state.handNumber + 1,
+              state.revision,
+            );
+          } else {
+            const actionInput = tableActionSchema.parse(input);
+            act(state, 0, actionInput.action, actionInput.amount);
+          }
+          state.revision++;
+          runBots(state);
+        } catch (err) {
+          return { status: 400, body: { error: (err as Error).message } };
+        }
+        const view = tableView(state);
+        db.prepare("UPDATE bot_tables SET state=? WHERE id=?").run(
+          JSON.stringify(state),
+          state.id,
+        );
+        db.prepare("INSERT INTO bot_commands VALUES(?,?,?)").run(
+          state.id,
+          input.actionId,
+          JSON.stringify(view),
+        );
+        return { status: 200, body: view };
+      })();
+      res.status(result.status).json(result.body);
+    });
   const attempts = (): Attempt[] =>
     (
       db.prepare("SELECT id,data FROM attempts ORDER BY id DESC").all() as {
