@@ -27,7 +27,7 @@ Open **http://127.0.0.1:3001**. Run from the repository root so migrations and b
 
 ## Practice
 
-- **Who wins?** Original targeted fixtures plus seeded random deals. Includes wheel straights, flush kickers, higher/lower two-pair ranks, full-house comparisons, board-only pots, and equal hands with different hole cards. Feedback shows both best five-card hands and the first decisive rank or kicker.
+- **Who wins?** Every exercise is a fresh seeded random deal from the full deck, without fixed examples or filtering for hand strength. Feedback marks the stronger hand, names both hands, displays each best five in rank order, and outlines the deciding rank or kicker for matching categories. Ties are explicitly marked.
 - **What beats me?** Classify four legal specific combinations. After answering, optionally reveal stronger categories derived by enumerating every legal opponent hand. Possible does not mean likely; uniform random cards are not a post-bet range.
 - **Pot odds.** Enter required equity. The final pot includes the original pot, opponent’s bet, and call. Answers within 0.5 percentage points are accepted.
 - **Equity vs. range.** Start on the river, or select the turn. Each explicitly listed combination is equally weighted. Turn equity enumerates all legal rivers separately for each combination. Ties receive half credit; blocked combinations are removed, malformed/duplicate ranges and empty surviving ranges are rejected by the engine. Feedback gives a graduated estimation result, exact equity, absolute error, and per-combination outcomes.
@@ -35,7 +35,7 @@ Open **http://127.0.0.1:3001**. Run from the repository root so migrations and b
 
 Progress separates categorical accuracy from numeric estimation error. Decision accuracy means choosing an accepted action under the stated assumptions, not universal optimality. Time spent is informational only. Recent sessions group attempts by UTC date; there is no timer or speed score.
 
-**Practice my weak areas:** rank skills by mistake rate in the last 100 attempts, breaking ties by number of mistakes. Categorical unsupported answers and pot-odds answers outside tolerance count as mistakes; equity estimates more than 5 percentage points away count as misses for selection only. Target the highest-ranked skill and its mode on three out of four seed values; the fourth keeps ordinary seeded practice in the selected mode. With no recorded weakness, select ordinary practice. The chosen rule appears on each exercise. Some fixture sets have limited variety.
+**Practice my weak areas:** rank skills by mistake rate in the last 100 attempts, breaking ties by number of mistakes. Categorical unsupported answers and pot-odds answers outside tolerance count as mistakes; equity estimates more than 5 percentage points away count as misses for selection only. Target the highest-ranked skill and its mode on three out of four seed values; the fourth keeps ordinary seeded practice in the selected mode. With no recorded weakness, select ordinary practice. The chosen rule appears on each exercise. Showdown deals always remain completely random, including during weak-area practice; they are never filtered by a skill tag. Other fixture sets have limited variety.
 
 Export all attempts as versioned JSON from Progress. Clearing requires a native confirmation dialog and deletes attempts and stored exercises. Export is for backup/analysis; importing is not implemented.
 
@@ -88,7 +88,7 @@ On Linux, Playwright may require `npx playwright install --with-deps chromium`. 
 
 Verified during delivery:
 
-- **42 Vitest tests passing:** all hand categories/ranking order, kicker comparisons, wheel straights, board-only ties, seven-card selection, duplicates, odds/tolerance, blockers/empty ranges, ties, known turn outcomes, legal stronger categories, seeded generation, all 12 authored scenarios, independent scenario equity checks, input validation, reopened-database persistence, concurrent/repeated submissions, export/clear and targeted selection.
+- **44 Vitest tests passing:** all hand categories/ranking order, kicker comparisons, wheel straights, board-only ties, seven-card selection, duplicates, odds/tolerance, blockers/empty ranges, ties, known turn outcomes, legal stronger categories, seeded generation, all 12 authored scenarios, independent scenario equity checks, input validation, reopened-database persistence, concurrent/repeated submissions, export/clear and targeted selection.
 - **300 seeded showdown comparisons** inside the evaluator verification test against independent MIT-licensed `pokersolver`. Expected category fixtures and known odds/equity cases are independently specified, not produced by the implementation under test.
 - **10 Playwright cases:** desktop and phone exercise/feedback flows, progress updates, keyboard submission/focus, all modes including turn equity, mobile overflow/card readability, searchable reference, clear/cancel confirmation, and zero external network requests during practice.
 - **Production build:** TypeScript checking, Vite assets, and bundled Node API.

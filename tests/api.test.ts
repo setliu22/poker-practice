@@ -32,19 +32,16 @@ describe("exercises and authored decisions", () => {
         expect(exerciseSchema.safeParse(a.exercise).success).toBe(true);
       }
   });
-  it("targeted who-wins includes six exact hand-comparison cases", () => {
+  it("every showdown is a legal random deal, even with a requested weak skill", () => {
     const found = new Set<string>();
-    for (let s = 0; s < 100; s++)
-      found.add(generate("who-wins", s, "id").exercise.sourceId);
-    for (const id of [
-      "wheel",
-      "flush-kicker",
-      "two-pair-kicker",
-      "full-house",
-      "board-only",
-      "equal-hands",
-    ])
-      expect(found.has(id)).toBe(true);
+    for (let seed = 0; seed < 100; seed++) {
+      const e = generate("who-wins", seed, "id", "river", "Kicker").exercise;
+      expect(e.sourceId).toBe(`deal-${seed}`);
+      const cards = [...e.hero!, ...e.villain!, ...e.board!];
+      validateCards(cards, 9, 9);
+      found.add(cards.join(""));
+    }
+    expect(found.size).toBe(100);
   });
   it("12 original decisions have legal cards and accept supported answers", () => {
     expect(scenarios).toHaveLength(12);
@@ -306,14 +303,7 @@ describe("submission edge cases", () => {
 describe("skill-specific generation", () => {
   it("every targeted skill appears in the selected exercise", () => {
     const targets = {
-      "who-wins": [
-        "Kicker",
-        "Straight",
-        "Flush",
-        "Full house",
-        "Split pot",
-        "Range comparison",
-      ],
+      "who-wins": ["Range comparison"],
       "what-beats-me": [
         "Flush",
         "Full house",
@@ -330,5 +320,30 @@ describe("skill-specific generation", () => {
             generate(mode as "equity", seed, "target", "river", tag).exercise
               .tags,
           ).toContain(tag);
+  });
+});
+describe("clear showdown comparisons", () => {
+  it("labels the winner and highlights the decisive kicker", () => {
+    const spec = generate("who-wins", 1, "comparison");
+    spec.exercise.hero = ["Kh", "3d"];
+    spec.exercise.villain = ["Qd", "4s"];
+    spec.exercise.board = ["Ac", "Ad", "9s", "9h", "2c"];
+    const f = grade(spec, "Player 1 wins");
+    expect(f.hands?.[0].outcome).toBe("winner");
+    expect(f.hands?.[1].outcome).toBe("loser");
+    expect(f.hands?.[0].summary).toBe("aces and nines");
+    expect(f.hands?.[0].decisiveCards).toEqual(["Kh"]);
+    expect(f.hands?.[1].decisiveCards).toEqual(["Qd"]);
+    expect(f.hands?.[0].cards).toEqual(["Ac", "Ad", "9s", "9h", "Kh"]);
+  });
+  it("marks a board-only tie without declaring a stronger player", () => {
+    const spec = generate("who-wins", 1, "tie");
+    spec.exercise.hero = ["2c", "3d"];
+    spec.exercise.villain = ["4c", "5d"];
+    spec.exercise.board = ["As", "Ks", "Qs", "Js", "Ts"];
+    const f = grade(spec, "Tie");
+    expect(f.hands?.map((h) => h.outcome)).toEqual(["tie", "tie"]);
+    expect(f.hands?.every((h) => h.decisiveCards?.length === 0)).toBe(true);
+    expect(f.explanation).toContain("The board plays");
   });
 });

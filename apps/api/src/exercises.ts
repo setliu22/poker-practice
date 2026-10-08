@@ -21,71 +21,6 @@ export type Specification = {
   seed: number;
   scenarioIndex?: number;
 };
-const fixtures = [
-  {
-    hero: ["As", "2d"],
-    villain: ["2h", "6d"],
-    board: ["3c", "4h", "5s", "Kc", "Qd"],
-    tags: ["Straight"],
-    id: "wheel",
-  },
-  {
-    hero: ["Ks", "Qd"],
-    villain: ["Qs", "Jh"],
-    board: ["As", "9s", "7s", "3s", "2d"],
-    tags: ["Flush", "Kicker"],
-    id: "flush-kicker",
-  },
-  {
-    hero: ["Kh", "3d"],
-    villain: ["Qd", "4s"],
-    board: ["Ac", "Ad", "9s", "9h", "2c"],
-    tags: ["Kicker"],
-    id: "two-pair-kicker",
-  },
-  {
-    hero: ["As", "Kh"],
-    villain: ["9s", "Kd"],
-    board: ["Ac", "9d", "Kc", "2s", "3c"],
-    tags: ["Kicker"],
-    id: "two-pair-higher-pair",
-  },
-  {
-    hero: ["As", "9d"],
-    villain: ["Ah", "2d"],
-    board: ["Ac", "Kd", "9h", "2s", "3c"],
-    tags: ["Kicker"],
-    id: "two-pair-lower-pair",
-  },
-  {
-    hero: ["Ah", "Kh"],
-    villain: ["As", "Qh"],
-    board: ["Ac", "Ad", "Kc", "Qd", "2s"],
-    tags: ["Full house", "Kicker"],
-    id: "full-house-pair",
-  },
-  {
-    hero: ["Ah", "3d"],
-    villain: ["9d", "4s"],
-    board: ["Ac", "Ad", "9s", "9h", "2c"],
-    tags: ["Full house"],
-    id: "full-house",
-  },
-  {
-    hero: ["2c", "3d"],
-    villain: ["4c", "5d"],
-    board: ["As", "Ks", "Qs", "Js", "Ts"],
-    tags: ["Split pot"],
-    id: "board-only",
-  },
-  {
-    hero: ["Th", "3d"],
-    villain: ["Tc", "4d"],
-    board: ["Ac", "Kd", "Qh", "Js", "2c"],
-    tags: ["Straight", "Split pot"],
-    id: "equal-hands",
-  },
-];
 export function generate(
   mode: Mode,
   seed: number,
@@ -107,23 +42,18 @@ export function generate(
     scenarioIndex = chosen.i;
     exercise = { ...exercise, ...chosen.s.exercise };
   } else if (mode === "who-wins") {
-    const pool = fixtures.filter(
-      (f) => !targetTag || f.tags.includes(targetTag),
-    );
-    const f = (pool.length ? pool : fixtures)[
-      Math.floor(rng() * (pool.length || fixtures.length))
-    ];
-    if ((!targetTag && rng() < 0.3) || targetTag === "Range comparison") {
-      const cards = deal(seed, 9);
-      exercise = {
-        ...exercise,
-        sourceId: `deal-${seed}`,
-        hero: cards.slice(0, 2),
-        villain: cards.slice(2, 4),
-        board: cards.slice(4),
-        tags: ["Range comparison"],
-      };
-    } else exercise = { ...exercise, ...f, id, sourceId: f.id };
+    const cards = deal(seed, 9);
+    exercise = {
+      ...exercise,
+      sourceId: `deal-${seed}`,
+      hero: cards.slice(0, 2),
+      villain: cards.slice(2, 4),
+      board: cards.slice(4),
+      tags: ["Range comparison"],
+      context: [
+        "A fresh random deal from a full deck. Compare each player’s best five cards, not just their hole cards.",
+      ],
+    };
     exercise.question = "Who wins at showdown?";
     exercise.options = ["Player 1 wins", "Player 2 wins", "Tie"];
   } else if (mode === "what-beats-me") {
@@ -264,6 +194,49 @@ function difference(a: ReturnType<typeof best>, b: ReturnType<typeof best>) {
               : "kicker";
   return `Both have ${a.name.toLowerCase()}. The ${role} decides it: ${rankName(a.kickers[i])} beats ${rankName(b.kickers[i])}.`;
 }
+function showdownHand(
+  hand: ReturnType<typeof best>,
+  label: string,
+  outcome: "winner" | "loser" | "tie",
+  decisiveIndex: number,
+) {
+  const plural = (v: number) => (v === 6 ? "sixes" : rankName(v) + "s");
+  const k = hand.kickers;
+  const summaries = [
+    `${rankName(k[0])}-high`,
+    `Pair of ${plural(k[0])}`,
+    `${plural(k[0])} and ${plural(k[1])}`,
+    `Three ${plural(k[0])}`,
+    `${rankName(k[0])}-high straight`,
+    `${rankName(k[0])}-high flush`,
+    `${plural(k[0])} full of ${plural(k[1])}`,
+    `Four ${plural(k[0])}`,
+    `${rankName(k[0])}-high straight flush`,
+  ];
+  const value = (card: string) => "23456789TJQKA".indexOf(card[0]) + 2;
+  const count = (card: string) =>
+    hand.cards.filter((c) => c[0] === card[0]).length;
+  const straight = hand.category === 4 || hand.category === 8;
+  const cards = [...hand.cards].sort((a, b) => {
+    if (straight)
+      return (
+        (k[0] === 5 && value(b) === 14 ? 1 : value(b)) -
+        (k[0] === 5 && value(a) === 14 ? 1 : value(a))
+      );
+    return count(b) - count(a) || value(b) - value(a);
+  });
+  return {
+    label,
+    name: hand.name,
+    summary: summaries[hand.category],
+    cards,
+    outcome,
+    decisiveCards:
+      decisiveIndex < 0
+        ? []
+        : cards.filter((c) => value(c) === k[decisiveIndex]),
+  };
+}
 export function grade(spec: Specification, answer: unknown): Feedback {
   const e = spec.exercise;
   if (e.mode === "decision") {
@@ -349,6 +322,10 @@ export function grade(spec: Specification, answer: unknown): Feedback {
     const boardHand = best(e.board!);
     const boardPlays =
       compare(mine, boardHand) === 0 && compare(theirs, boardHand) === 0;
+    const decisiveIndex =
+      mine.category === theirs.category
+        ? mine.kickers.findIndex((v, i) => v !== theirs.kickers[i])
+        : -1;
     return {
       kind: "exact",
       correct: answer === expected,
@@ -363,8 +340,18 @@ export function grade(spec: Specification, answer: unknown): Feedback {
               comparison > 0 ? theirs : mine,
             ),
       hands: [
-        { label: "Player 1", ...mine },
-        { label: "Player 2", ...theirs },
+        showdownHand(
+          mine,
+          "Player 1",
+          comparison > 0 ? "winner" : comparison < 0 ? "loser" : "tie",
+          decisiveIndex,
+        ),
+        showdownHand(
+          theirs,
+          "Player 2",
+          comparison < 0 ? "winner" : comparison > 0 ? "loser" : "tie",
+          decisiveIndex,
+        ),
       ],
       takeaway:
         "Compare the best five cards. Unused hole cards do not break ties.",

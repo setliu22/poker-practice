@@ -22,14 +22,22 @@ const rankNames: Record<string, string> = {
   J: "Jack",
   T: "10",
 };
-function Cards({ cards, small = false }: { cards: string[]; small?: boolean }) {
+function Cards({
+  cards,
+  small = false,
+  highlighted = [],
+}: {
+  cards: string[];
+  small?: boolean;
+  highlighted?: string[];
+}) {
   return (
     <div className={`cards ${small ? "small" : ""}`}>
       {cards.map((c) => (
         <span
-          className={`card suit-${c[1]}`}
+          className={`card suit-${c[1]} ${highlighted.includes(c) ? "decisive" : ""}`}
           key={c}
-          aria-label={`${rankNames[c[0]] ?? c[0]} of ${suitInfo[c[1]].name}`}
+          aria-label={`${rankNames[c[0]] ?? c[0]} of ${suitInfo[c[1]].name}${highlighted.includes(c) ? ", deciding rank" : ""}`}
           role="img"
         >
           <span>{c[0] === "T" ? "10" : c[0]}</span>
@@ -541,17 +549,45 @@ function Practice() {
                       <p className="calculation">{feedback.calculation}</p>
                     )}
                     {feedback.hands && (
-                      <div className="best-hands">
+                      <div
+                        className={`best-hands ${exercise.mode === "who-wins" ? "showdown-comparison" : ""}`}
+                      >
                         {feedback.hands.map((h) => (
-                          <div key={h.label}>
+                          <div
+                            className={`hand-result ${h.outcome ?? ""}`}
+                            key={h.label}
+                          >
+                            {h.outcome && (
+                              <span className="hand-outcome">
+                                {h.outcome === "winner"
+                                  ? "Stronger hand"
+                                  : h.outcome === "loser"
+                                    ? "Weaker hand"
+                                    : "Equal hand · split pot"}
+                              </span>
+                            )}
                             <h4>
                               {h.label} · {h.name}
                             </h4>
-                            <Cards cards={h.cards} small />
+                            {h.summary && (
+                              <p className="hand-summary">{h.summary}</p>
+                            )}
+                            <Cards
+                              cards={h.cards}
+                              small={exercise.mode !== "who-wins"}
+                              highlighted={h.decisiveCards}
+                            />
                           </div>
                         ))}
                       </div>
                     )}
+                    {exercise.mode === "who-wins" &&
+                      feedback.hands?.some((h) => h.decisiveCards?.length) && (
+                        <p className="quiet">
+                          Outlined cards show the deciding rank or kicker when
+                          both players have the same hand category.
+                        </p>
+                      )}
                     {feedback.rangeResults && (
                       <div className="table-scroll">
                         <table>

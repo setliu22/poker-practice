@@ -1177,3 +1177,53 @@ footer {
     scroll-behavior: auto !important;
   }
 }
+.showdown-comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.showdown-comparison .hand-result {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #0d1521;
+}
+.showdown-comparison .winner {
+  border-color: #679fff;
+  background: #142743;
+}
+.hand-outcome {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  margin-bottom: 8px;
+}
+.winner .hand-outcome,
+.tie .hand-outcome {
+  color: var(--accent);
+}
+.feedback .hand-summary {
+  font-size: 16px;
+  font-weight: 650;
+  margin: 4px 0 16px;
+  text-transform: capitalize;
+}
+.card.decisive {
+  outline: 2px solid #8bb8ff;
+  outline-offset: 2px;
+}
+.showdown-comparison .cards {
+  gap: 6px;
+}
+.showdown-comparison .card {
+  width: 38px;
+  height: 56px;
+  font-size: 21px;
+}
+@media (max-width: 900px) {
+  .showdown-comparison {
+    grid-template-columns: 1fr;
+  }
+}

@@ -18,6 +18,15 @@ test("complete exercise, show feedback, update progress and start next", async (
     page.getByRole("region", { name: "Answer feedback" }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: /Player 1 ·/ })).toBeVisible();
+  await expect(page.locator(".showdown-comparison .card")).toHaveCount(10);
+  await expect(page.locator(".hand-outcome")).toHaveCount(2);
+  await expect(page.locator(".hand-outcome").first()).toContainText(
+    /Stronger hand|Weaker hand|Equal hand/,
+  );
+  await page.screenshot({
+    path: test.info().outputPath("showdown-feedback.png"),
+    fullPage: true,
+  });
   await expect(
     page.getByRole("button", { name: "Check my answer" }),
   ).toHaveCount(0);

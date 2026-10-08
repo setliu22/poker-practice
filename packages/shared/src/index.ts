@@ -63,7 +63,14 @@ export type Feedback = {
   result: string;
   explanation: string;
   takeaway: string;
-  hands?: { label: string; name: string; cards: string[] }[];
+  hands?: {
+    label: string;
+    name: string;
+    cards: string[];
+    summary?: string;
+    outcome?: "winner" | "loser" | "tie";
+    decisiveCards?: string[];
+  }[];
   calculation?: string;
   equity?: number;
   estimate?: number;

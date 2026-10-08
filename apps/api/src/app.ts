@@ -106,9 +106,12 @@ export function createApp(db: Database.Database) {
     }
     const spec = generate(mode, seed, randomUUID(), input.street, target);
     if (input.targetWeak)
-      spec.exercise.selection = target
-        ? `Targeting ${target}: highest mistake rate among the last 100 attempts. One in four seeded selections mixes in ordinary practice.`
-        : "Mixed practice: no eligible recent weakness, or this is the one-in-four ordinary selection.";
+      spec.exercise.selection =
+        mode === "who-wins"
+          ? "Random showdown practice: deals are never filtered by skill or hand strength."
+          : target
+            ? `Targeting ${target}: highest mistake rate among the last 100 attempts. One in four seeded selections mixes in ordinary practice.`
+            : "Mixed practice: no eligible recent weakness, or this is the one-in-four ordinary selection.";
     db.prepare("INSERT INTO exercises VALUES(?,?,?)").run(
       spec.exercise.id,
       JSON.stringify(spec),
@@ -165,14 +168,12 @@ export function createApp(db: Database.Database) {
   app.get("/api/progress", (_req, res) => res.json(progress()));
   app.get("/api/attempts", (_req, res) => res.json(attempts()));
   app.get("/api/export", (_req, res) =>
-    res
-      .attachment("poker-practice-progress.json")
-      .json({
-        version: 1,
-        exportedAt: new Date().toISOString(),
-        profile: "Local learner",
-        attempts: attempts(),
-      }),
+    res.attachment("poker-practice-progress.json").json({
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      profile: "Local learner",
+      attempts: attempts(),
+    }),
   );
   app.delete("/api/progress", (_req, res) => {
     db.transaction(() => {
@@ -189,15 +190,13 @@ export function createApp(db: Database.Database) {
       _next: express.NextFunction,
     ) => {
       if (err instanceof ZodError) {
-        res
-          .status(400)
-          .json({
-            error:
-              "Invalid request: " +
-              err.issues
-                .map((i) => `${i.path.join(".")}: ${i.message}`)
-                .join("; "),
-          });
+        res.status(400).json({
+          error:
+            "Invalid request: " +
+            err.issues
+              .map((i) => `${i.path.join(".")}: ${i.message}`)
+              .join("; "),
+        });
         return;
       }
       if ("status" in err && (err as { status: number }).status === 400) {
