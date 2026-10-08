@@ -296,12 +296,12 @@ export function grade(spec: Specification, answer: unknown): Feedback {
       rangeResults: result.rows,
       result:
         error <= 2
-          ? "Very close estimate"
+          ? "Within 2 percentage points"
           : error <= 5
-            ? "Close estimate"
+            ? "Within 5 percentage points"
             : error <= 12
-              ? "A useful estimate to refine"
-              : "Let’s compare the range",
+              ? "Within 12 percentage points"
+              : "More than 12 percentage points off",
       explanation: `Exact equity is ${result.equity.toFixed(2)}%. Your estimate differs by ${error.toFixed(2)} percentage points. Each legal opponent combination has equal weight; ties count as half a win.\n${comparisons}`,
       takeaway:
         "Equity describes this supplied range, not an unspecified opponent or a betting recommendation.",

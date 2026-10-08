@@ -64,9 +64,9 @@ async function api<T>(path: string, options?: RequestInit): Promise<T> {
 const descriptions: Record<Mode, string> = {
   "who-wins": "Find the best five cards.",
   "what-beats-me": "Compare legal opponent hands.",
-  "pot-odds": "Learn the price of a call.",
-  equity: "Think in combinations, not guesses.",
-  decision: "Choose with clear assumptions.",
+  "pot-odds": "Calculate the equity needed to call.",
+  equity: "Estimate equity against an exact range.",
+  decision: "Compare actions under stated assumptions.",
 };
 function App() {
   const [page, setPage] = useState<"Practice" | "Progress" | "Reference">(
@@ -82,9 +82,7 @@ function App() {
           <span className="brand-mark" aria-hidden="true">
             ♠
           </span>
-          <span>
-            Poker Practice<small>A little practice. Better decisions.</small>
-          </span>
+          <span>Poker Practice</span>
         </div>
         <nav aria-label="Main navigation">
           {(["Practice", "Progress", "Reference"] as const).map((p) => (
@@ -111,7 +109,6 @@ function App() {
         )}
       </main>
       <footer>
-        Made for learning, at your own pace.
         <span>Heads-up · No-limit Texas Hold’em · Stored on this device</span>
       </footer>
     </>
@@ -220,9 +217,7 @@ function Practice() {
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">BUILD YOUR POKER INSTINCTS</p>
-          <h1>One hand at a time.</h1>
-          <p>Short exercises. Clear explanations. No rush.</p>
+          <h1>Practice</h1>
         </div>
         <button
           className={`secondary weak-button ${weak ? "selected" : ""}`}
@@ -238,7 +233,7 @@ function Practice() {
       </div>
       <div className="practice-layout">
         <aside className="mode-panel">
-          <p className="eyebrow">CHOOSE YOUR PRACTICE</p>
+          <p className="eyebrow">PRACTICE MODES</p>
           <div className="mode-list" aria-label="Practice modes">
             {modes.map((m, i) => (
               <button
@@ -260,13 +255,6 @@ function Practice() {
                 <span aria-hidden="true">→</span>
               </button>
             ))}
-          </div>
-          <div className="aside-note">
-            <strong>Accuracy comes first.</strong>
-            <p>
-              Take your time. There’s no countdown, and mistakes help shape your
-              next practice.
-            </p>
           </div>
         </aside>
         <section
@@ -702,9 +690,7 @@ function Progress() {
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">YOUR LEARNING JOURNEY</p>
-          <h1>Small steps add up.</h1>
-          <p>Separate measures for accuracy and estimation. No single score.</p>
+          <h1>Progress</h1>
         </div>
         <a className="secondary" href="/api/export" download>
           Export JSON ↓
@@ -724,11 +710,6 @@ function Progress() {
             <div>
               <p className="eyebrow">EXERCISES COMPLETED</p>
               <strong>{data.total}</strong>
-              <p>
-                {data.total
-                  ? "Keep building your understanding."
-                  : "Your first exercise is a good place to start."}
-              </p>
             </div>
             <div>
               <h2>Skills needing practice</h2>
@@ -940,9 +921,7 @@ function Reference() {
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">A HANDY COMPANION</p>
-          <h1>The essentials, clearly.</h1>
-          <p>A quick reference for the ideas behind your practice.</p>
+          <h1>Reference</h1>
         </div>
       </div>
       <div className="search">
