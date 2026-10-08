@@ -50,5 +50,62 @@ export type TableView = {
     maxRaiseTo: number;
   } | null;
   history: { street: string; seat: number | null; text: string }[];
+  rounds?: DecisionReview[];
   review: { title: string; text: string; kind: "exact" | "illustrative" }[];
+};
+
+export type ProbabilityReview = {
+  win: number;
+  tie: number;
+  lose: number;
+  share: number;
+  exact: boolean;
+  samples: number;
+  note: string;
+};
+export type RangeReview = {
+  seat: number;
+  name: string;
+  style: string;
+  combinations: number;
+  examples: { cards: string[]; weight: number }[];
+  groups: { name: string; percent: number }[];
+};
+export type ActionValue = {
+  key: string;
+  label: string;
+  chips: number;
+  margin: number;
+  exact: boolean;
+  samples: number;
+  allFold: number;
+};
+export type DecisionReview = {
+  id: number;
+  street: string;
+  board: string[];
+  hero: string[];
+  hand: string;
+  action: string;
+  pot: number;
+  call: number;
+  callThreshold: number | null;
+  risk: number;
+  bluffThreshold: number | null;
+  opponents: RangeReview[];
+  rangeProbability: ProbabilityReview;
+  actualProbability?: ProbabilityReview;
+  actualCards?: {
+    seat: number;
+    name: string;
+    cards: string[];
+    folded: boolean;
+    hand: string;
+  }[];
+  values: ActionValue[];
+  chosenKey: string;
+  verdict: string;
+  explanation: string;
+  model: string;
+  rangeNote: string;
 };

@@ -1451,3 +1451,152 @@ footer {
     gap: 10px;
   }
 }
+.round-reviews {
+  margin-top: 2rem;
+  border-top: 1px solid var(--border, #293446);
+  padding-top: 1.5rem;
+}
+.decision-review {
+  margin: 1rem 0;
+  border: 1px solid #303e55;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.decision-review > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1rem;
+  cursor: pointer;
+  flex-wrap: wrap;
+  background: #172235;
+}
+.decision-review > summary::before {
+  content: "+";
+  color: #99baff;
+}
+.decision-review[open] > summary::before {
+  content: "−";
+}
+.decision-body {
+  padding: 1.25rem;
+}
+.review-cards {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+.decision-body h3 {
+  font-size: 1rem;
+  margin: 1rem 0 0.7rem;
+}
+.decision-body h4 {
+  margin: 1rem 0 0.8rem;
+}
+.odds-block {
+  padding: 0.5rem 0;
+}
+.odds-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.7rem;
+}
+.odds-grid > div {
+  background: #101927;
+  border: 1px solid #2a3951;
+  border-radius: 9px;
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.odds-grid strong {
+  color: #a6c4ff;
+  font-size: 1.4rem;
+  font-variant-numeric: tabular-nums;
+}
+.odds-grid span {
+  font-size: 0.8rem;
+  color: #b2bfd3;
+}
+.review-verdict {
+  border-left: 3px solid #739ee9;
+  padding: 0.1rem 1rem;
+  margin: 1rem 0;
+}
+.value-scroll {
+  overflow-x: auto;
+}
+.action-values {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.action-values caption {
+  text-align: left;
+  font-weight: 600;
+  padding: 0.8rem 0;
+}
+.action-values td,
+.action-values th {
+  padding: 0.8rem;
+  text-align: left;
+  border-bottom: 1px solid #2a3547;
+}
+.chosen-action {
+  background: #1c2c46;
+}
+.model-details,
+.range-details {
+  margin: 1rem 0;
+  padding: 0.9rem;
+  border: 1px solid #2a3547;
+  border-radius: 8px;
+}
+.model-details summary,
+.range-details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.math-note {
+  border-top: 1px solid #2a3547;
+  padding: 0.5rem 0;
+}
+.range-groups {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.range-groups > span {
+  padding: 0.4rem 0.6rem;
+  background: #1c2940;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+.range-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.range-examples > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.actual-review {
+  padding-top: 0.5rem;
+  margin-top: 1.5rem;
+  border-top: 1px solid #33445e;
+}
+@media (max-width: 650px) {
+  .odds-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .decision-body {
+    padding: 0.8rem;
+  }
+  .action-values td,
+  .action-values th {
+    padding: 0.5rem;
+  }
+}

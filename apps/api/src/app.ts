@@ -23,6 +23,7 @@ import {
   tableView,
   type TableState,
 } from "../../../packages/poker/src/table";
+import { analyzeTable } from "../../../packages/poker/src/table-review";
 export function createApp(db: Database.Database) {
   const app = express();
   app.use(express.json({ limit: "32kb" }));
@@ -45,7 +46,12 @@ export function createApp(db: Database.Database) {
       res.status(404).json({ error: "Table not found. Start a new table." });
       return;
     }
-    res.json(tableView(JSON.parse(row.state)));
+    const state = analyzeTable(JSON.parse(row.state));
+    db.prepare("UPDATE bot_tables SET state=? WHERE id=?").run(
+      JSON.stringify(state),
+      state.id,
+    );
+    res.json(tableView(state));
   });
   for (const route of ["actions", "next"] as const)
     app.post(`/api/tables/:id/${route}`, (req, res) => {
@@ -69,7 +75,7 @@ export function createApp(db: Database.Database) {
             status: 404,
             body: { error: "Table not found. Start a new table." },
           };
-        let state: TableState = JSON.parse(row.state);
+        let state: TableState = analyzeTable(JSON.parse(row.state));
         if (state.revision !== input.revision)
           return {
             status: 409,
@@ -101,6 +107,7 @@ export function createApp(db: Database.Database) {
         } catch (err) {
           return { status: 400, body: { error: (err as Error).message } };
         }
+        analyzeTable(state);
         const view = tableView(state);
         db.prepare("UPDATE bot_tables SET state=? WHERE id=?").run(
           JSON.stringify(state),

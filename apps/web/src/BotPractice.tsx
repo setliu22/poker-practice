@@ -4,6 +4,7 @@ import type {
   TableView,
 } from "../../../packages/shared/src/table";
 import { Cards } from "./Cards";
+import { RoundReview } from "./RoundReview";
 async function request<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(
     "/api/tables" + path,
@@ -167,8 +168,9 @@ export function BotPractice() {
             cannot see your cards. The table saves automatically.
           </p>
           <p>
-            Feedback appears after each hand. These bots are original practice
-            opponents, not MIT PokerBots entries or a solver.
+            Decision reviews appear after each action. Bot cards are revealed
+            after the hand. These bots are original practice opponents, not MIT
+            PokerBots entries or a solver.
           </p>
         </section>
       ) : (
@@ -382,6 +384,10 @@ export function BotPractice() {
                 </p>
               </section>
             )}
+            <RoundReview
+              rounds={table.rounds ?? []}
+              complete={table.complete}
+            />
           </section>
           <aside className="panel hand-history">
             <h2>Hand history</h2>
