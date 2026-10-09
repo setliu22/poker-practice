@@ -1,4 +1,13 @@
 import { best, compare, deal, random, ranks } from "./index";
+import {
+  contextualDistribution,
+  personalities,
+  publicProfile,
+  type BotObservation,
+  type PublicAction,
+  type PublicRead,
+} from "./bot-policy";
+export type { BotObservation } from "./bot-policy";
 import type {
   TableAction,
   TableView,
@@ -8,6 +17,7 @@ export type Seat = {
   seat: number;
   name: string;
   style: string;
+  botId?: string;
   stack: number;
   streetBet: number;
   contributed: number;
@@ -15,16 +25,6 @@ export type Seat = {
   allIn: boolean;
   hole: string[];
   payout: number;
-};
-export type BotObservation = {
-  hole: string[];
-  board: string[];
-  style: string;
-  pot: number;
-  currentBet: number;
-  streetBet: number;
-  playersLeft: number;
-  legal: NonNullable<TableView["legal"]>;
 };
 export type PolicyEvent = {
   seat: number;
@@ -45,6 +45,9 @@ export type DecisionFrame = {
   action: TableAction;
   amount?: number;
   eventCount: number;
+  policyVersion?: number;
+  actions?: PublicAction[];
+  reads?: PublicRead[];
 };
 export type TableState = {
   id: string;
@@ -69,6 +72,10 @@ export type TableState = {
   policyEvents?: PolicyEvent[];
   rounds?: DecisionReview[];
   analysisDisabled?: boolean;
+  policyVersion?: number;
+  actions?: PublicAction[];
+  reads?: PublicRead[];
+  startingReads?: PublicRead[];
 };
 const streets = ["preflop", "flop", "turn", "river"];
 const active = (s: TableState) => s.players.filter((p) => !p.folded);
@@ -101,6 +108,8 @@ export function createTable(
   dealer = 0,
   handNumber = 1,
   revision = 0,
+  policyVersion = 2,
+  reads: PublicRead[] = [],
 ): TableState {
   if (!Number.isInteger(count) || count < 2 || count > 9)
     throw new Error("Choose 2 to 9 players, including you.");
@@ -108,6 +117,10 @@ export function createTable(
   const s: TableState = {
     id,
     revision,
+    policyVersion,
+    actions: [],
+    reads: structuredClone(reads),
+    startingReads: structuredClone(reads),
     seed,
     handNumber,
     dealer: dealer % count,
@@ -116,9 +129,20 @@ export function createTable(
     runout: cards.slice(count * 2),
     players: Array.from({ length: count }, (_, seat) => ({
       seat,
-      name: seat === 0 ? "You" : `Bot ${seat}`,
+      name:
+        seat === 0
+          ? "You"
+          : policyVersion === 2
+            ? personalities[seat - 1].name
+            : `Bot ${seat}`,
+      botId:
+        seat && policyVersion === 2 ? personalities[seat - 1].id : undefined,
       style:
-        seat === 0 ? "Human" : ["Tight", "Loose", "Aggressive"][(seat - 1) % 3],
+        seat === 0
+          ? "Human"
+          : policyVersion === 2
+            ? personalities[seat - 1].style
+            : ["Tight", "Loose", "Aggressive"][(seat - 1) % 3],
       stack: 1000,
       streetBet: 0,
       contributed: 0,
@@ -285,7 +309,6 @@ export function act(
   const legal = legalActions(s, seat);
   if (!legal) throw new Error("It is not this player’s turn.");
   const p = s.players[seat];
-  const before = pot(s);
   if (action === "check" && !legal.canCheck)
     throw new Error("You must call, raise, or fold.");
   if (action === "call" && !legal.toCall)
@@ -317,6 +340,9 @@ export function act(
         action,
         amount,
         eventCount: s.policyEvents?.length ?? 0,
+        policyVersion: s.policyVersion,
+        actions: structuredClone(s.actions ?? []),
+        reads: structuredClone(s.reads ?? []),
       });
     } else {
       s.policyEvents ??= [];
@@ -324,18 +350,29 @@ export function act(
         seat,
         action,
         amount,
-        observation: {
-          board: [...s.board],
-          style: p.style,
-          pot: before,
-          currentBet: s.currentBet,
-          streetBet: p.streetBet,
-          playersLeft: active(s).length,
-          legal: { ...legal },
-        },
+        observation: (() => {
+          const { hole, ...observation } = botObservation(s, seat);
+          return observation;
+        })(),
       });
     }
   }
+
+  s.actions ??= [];
+  s.actions.push({ seat, street: s.street, action, amount });
+  s.reads ??= [];
+  let read = s.reads.find((r) => r.seat === seat);
+  if (!read) {
+    read = { seat, decisions: 0, facing: 0, folds: 0, calls: 0, raises: 0 };
+    s.reads.push(read);
+  }
+  read.decisions++;
+  if (legal.toCall) {
+    read.facing++;
+    if (action === "fold") read.folds++;
+    if (action === "call") read.calls++;
+  }
+  if (action === "raise") read.raises++;
 
   if (action === "fold") {
     p.folded = true;
@@ -384,6 +421,7 @@ export function act(
 export function botDistribution(
   o: BotObservation,
 ): { action: TableAction; amount?: number; probability: number }[] {
+  if (o.policyVersion === 2) return contextualDistribution(o);
   const values = o.hole.map((c) => ranks.indexOf(c[0]) + 2);
   let strength: number;
   if (!o.board.length) {
@@ -451,23 +489,45 @@ export function botAction(
   const choice = choices[choices.length - 1];
   return { action: choice.action, amount: choice.amount };
 }
+// This is the only observation boundary: no other hole cards or future board leave it.
+export function botObservation(s: TableState, seat = s.actor!): BotObservation {
+  const p = s.players[seat];
+  return {
+    hole: [...p.hole],
+    board: [...s.board],
+    style: p.style,
+    pot: pot(s),
+    currentBet: s.currentBet,
+    streetBet: p.streetBet,
+    playersLeft: active(s).length,
+    legal: { ...legalActions(s, seat)! },
+    policyVersion: s.policyVersion ?? 1,
+    botId: p.botId,
+    seat,
+    dealer: s.dealer,
+    tableSize: s.players.length,
+    activeSeats: active(s).map((p) => p.seat),
+    stack: p.stack,
+    effectiveStack: Math.min(
+      p.stack,
+      Math.max(
+        0,
+        ...active(s)
+          .filter((q) => q.seat !== seat)
+          .map((q) => q.stack),
+      ),
+    ),
+    history: structuredClone(s.actions ?? []),
+    reads: structuredClone(s.reads ?? []),
+  };
+}
 export function runBots(s: TableState) {
   let safety = 0;
   while (!s.complete && s.actor !== 0) {
     if (++safety > 500) throw new Error("Hand exceeded action limit.");
-    const p = s.players[s.actor!],
-      legal = legalActions(s)!;
+    const p = s.players[s.actor!];
     const decision = botAction(
-      {
-        hole: [...p.hole],
-        board: [...s.board],
-        style: p.style,
-        pot: pot(s),
-        currentBet: s.currentBet,
-        streetBet: p.streetBet,
-        playersLeft: active(s).length,
-        legal,
-      },
+      botObservation(s),
       s.seed + s.history.length * 7919 + p.seat,
     );
     act(s, p.seat, decision.action, decision.amount);
@@ -488,6 +548,7 @@ export function tableView(s: TableState): TableView {
     complete: s.complete,
     players: s.players.map((p) => ({
       ...p,
+      profile: publicProfile(p.botId),
       hole: p.seat === 0 || s.complete ? p.hole : undefined,
       bestFive:
         s.complete && !p.folded && s.board.length === 5

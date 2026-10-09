@@ -39,7 +39,9 @@ Short-term chip results cannot grade decisions. Practice should revisit specific
 5. [Poker bankroll management](https://pokertrainer.se/poker-bankroll-management/) repeats $800/$2,000 as 40/100 buy-ins of $200. The correct multiplication is $8,000/$20,000. No bankroll recommendation is needed for our no-money app.
 6. Public claims about solver frequencies, near-zero loss from simplified charts, and population studies cannot be independently reproduced from the tutorial text alone. Treat them as the site's claims. Do not label our heuristic policy GTO, import unsupported solver numbers, or assume the source's simplified recommendations are universal.
 
-## Current implementation audit
+## Implementation audit at the time of research
+
+This section describes policy version 1. The subsequent named-opponent update adds contextual position/draw/history policies and public-read adaptation; the one-round feedback model and sampling limitations still apply. See the README for current behavior.
 
 Inspected `packages/poker/src/table.ts` and `packages/poker/src/table-review.ts`.
 

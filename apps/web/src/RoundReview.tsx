@@ -236,9 +236,12 @@ export function RoundReview({
         <summary>Bot policy</summary>
         <p>
           These original rule-based bots use their own cards and public
-          information. Tight bots fold more marginal hands, loose bots call
-          more, and aggressive bots bet and bluff more. Range weights come from
-          those same rules, not a solver or a human population model.
+          information. Named opponents use position, stack depth, board texture,
+          draws, earlier actions, and distinct playstyle tendencies. Remy also
+          adapts gradually to public actions across hands at this table. Older
+          saved hands retain their original policy until the next deal. Range
+          weights come from those same rules, not a solver or a human population
+          model.
         </p>
       </details>
     </section>

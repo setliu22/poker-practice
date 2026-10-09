@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type {
+  BotProfile,
   TableAction,
   TableView,
 } from "../../../packages/shared/src/table";
+import { BotProfileDialog } from "./BotProfileDialog";
 import { Cards } from "./Cards";
 import { RoundReview } from "./RoundReview";
 async function request<T>(path: string, body?: unknown): Promise<T> {
@@ -21,6 +23,7 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
   return data;
 }
 export function BotPractice() {
+  const [profile, setProfile] = useState<BotProfile | null>(null);
   const [table, setTable] = useState<TableView | null>(null),
     [count, setCount] = useState(2),
     [busy, setBusy] = useState(false),
@@ -121,6 +124,9 @@ export function BotPractice() {
     Number(raiseTo) <= legal.maxRaiseTo;
   return (
     <>
+      {profile && (
+        <BotProfileDialog profile={profile} onClose={() => setProfile(null)} />
+      )}
       <div className="page-heading">
         <h1>Bot table</h1>
         <div className="table-setup">
@@ -164,8 +170,9 @@ export function BotPractice() {
         <section className="panel">
           <h2>Play against local bots</h2>
           <p>
-            Select 2–9 players. Bots use tight, loose, or aggressive rules and
-            cannot see your cards. The table saves automatically.
+            Select 2–9 players. Each opponent has a distinct playstyle. Open
+            their Playstyle button to see their tendencies. Bots cannot see your
+            cards. The table saves automatically.
           </p>
           <p>
             Decision reviews appear after each action. Bot cards are revealed
@@ -215,6 +222,17 @@ export function BotPractice() {
                     {p.style === "Human" ? "Your seat" : p.style} · {p.stack}{" "}
                     chips
                   </p>
+                  {p.profile && (
+                    <button
+                      type="button"
+                      className="secondary playstyle-button"
+                      aria-label={`${p.name} playstyle`}
+                      aria-haspopup="dialog"
+                      onClick={() => setProfile(p.profile!)}
+                    >
+                      Playstyle
+                    </button>
+                  )}
                   {p.hole ? (
                     <Cards cards={p.hole} small={p.seat !== 0} />
                   ) : (

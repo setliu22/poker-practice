@@ -84,3 +84,51 @@ test("heads-up controls work by keyboard and table size can change between hands
     ),
   ).toBe(true);
 });
+test("named opponents have optional playstyle dialogs with keyboard dismissal and focus return", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByLabel("Players, including you").selectOption("9");
+  await page.getByRole("button", { name: "Start table", exact: true }).click();
+  await expect(page.getByRole("button", { name: /playstyle$/ })).toHaveCount(8);
+  const opener = page.getByRole("button", { name: "Mara playstyle" });
+  await opener.focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Mara" });
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByText("Patient trapper", { exact: true }),
+  ).toBeVisible();
+  await expect(dialog.getByRole("listitem")).toHaveCount(3);
+  expect(
+    await dialog.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return (
+        r.left >= 0 &&
+        r.right <= innerWidth &&
+        r.top >= 0 &&
+        r.bottom <= innerHeight
+      );
+    }),
+  ).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  await page.getByRole("button", { name: "Remy playstyle" }).click();
+  await expect(
+    page
+      .getByRole("dialog", { name: "Remy" })
+      .getByText(/remembers public actions/i),
+  ).toBeVisible();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});

@@ -16,6 +16,14 @@ export const tableNextSchema = z
     actionId: z.string().uuid(),
   })
   .strict();
+export type BotProfile = {
+  id: string;
+  name: string;
+  style: string;
+  summary: string;
+  tendencies: string[];
+  adjustment: string;
+};
 export type TableAction = "fold" | "check" | "call" | "raise";
 export type TableView = {
   id: string;
@@ -41,6 +49,7 @@ export type TableView = {
     payout: number;
     handName?: string;
     bestFive?: string[];
+    profile?: BotProfile;
   }[];
   legal: {
     toCall: number;

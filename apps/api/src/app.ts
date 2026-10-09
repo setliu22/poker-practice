@@ -97,6 +97,8 @@ export function createApp(db: Database.Database) {
               state.dealer + 1,
               state.handNumber + 1,
               state.revision,
+              2,
+              state.reads ?? [],
             );
           } else {
             const actionInput = tableActionSchema.parse(input);

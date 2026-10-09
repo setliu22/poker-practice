@@ -2,6 +2,7 @@ import { best, compare, deck, random } from "./index";
 import {
   act,
   botAction,
+  botObservation,
   botDistribution,
   createTable,
   legalActions,
@@ -193,6 +194,9 @@ function valueModel(
     id: "model",
     revision: 0,
     seed,
+    policyVersion: f.policyVersion ?? 1,
+    actions: structuredClone(f.actions ?? []),
+    reads: structuredClone(f.reads ?? []),
     handNumber: 1,
     dealer: f.dealer,
     street: f.street,
@@ -270,6 +274,8 @@ function valueModel(
       ];
       const s: TableState = {
         ...probe,
+        actions: structuredClone(f.actions ?? []),
+        reads: structuredClone(f.reads ?? []),
         board: [...f.board],
         runout,
         players: f.players.map((p) => ({
@@ -289,20 +295,7 @@ function valueModel(
         if (s.street !== f.street || seat === 0)
           a = { action: l.toCall ? "call" : "check" };
         else {
-          const p = s.players[seat];
-          a = botAction(
-            {
-              hole: p.hole,
-              board: s.board,
-              style: p.style,
-              pot: s.players.reduce((v, q) => v + q.contributed, 0),
-              currentBet: s.currentBet,
-              streetBet: p.streetBet,
-              playersLeft: s.players.filter((q) => !q.folded).length,
-              legal: l,
-            },
-            Math.floor(rng() * 4294967295),
-          );
+          a = botAction(botObservation(s), Math.floor(rng() * 4294967295));
         }
         act(s, seat, a.action, a.amount);
       }
@@ -430,6 +423,8 @@ export function recoverFrames(s: TableState) {
     s.dealer,
     s.handNumber,
     s.revision,
+    s.policyVersion ?? 1,
+    s.startingReads ?? [],
   );
   try {
     for (const e of s.history) {
@@ -458,6 +453,8 @@ export function recoverFrames(s: TableState) {
     ) {
       s.decisions = replay.decisions;
       s.policyEvents = replay.policyEvents;
+      s.actions = replay.actions;
+      s.reads = replay.reads;
     }
   } catch {
     /* Old hands that cannot be replayed retain their recorded results. */

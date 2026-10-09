@@ -22,6 +22,11 @@ describe("bot table API", () => {
     const r = await request(app).post("/api/tables").send({ players: 9 });
     expect(r.status).toBe(201);
     expect(r.body.players).toHaveLength(9);
+    expect(r.body.players[1].name).toBe("Mara");
+    expect(r.body.players[1].profile.style).toBe("Patient trapper");
+    expect(JSON.stringify(r.body)).not.toContain("tuning");
+    expect(r.body).not.toHaveProperty("reads");
+    expect(r.body).not.toHaveProperty("policyEvents");
     expect(r.body).not.toHaveProperty("seed");
     if (!r.body.complete)
       expect(
@@ -58,6 +63,9 @@ describe("bot table API", () => {
   });
   it("deals next hands once, rotating the dealer and resetting stacks", async () => {
     const s = createTable(randomUUID(), 2, 1);
+    s.reads = [
+      { seat: 0, decisions: 20, facing: 15, folds: 10, calls: 3, raises: 2 },
+    ];
     s.complete = true;
     s.actor = null;
     db.prepare("INSERT INTO bot_tables VALUES(?,?)").run(
@@ -69,6 +77,7 @@ describe("bot table API", () => {
     expect(r.status).toBe(200);
     expect(r.body.handNumber).toBe(2);
     expect(r.body.dealer).toBe(1);
+    expect(r.body.players[1].name).toBe("Mara");
     expect(
       (await request(app).post(`/api/tables/${s.id}/next`).send(body)).body,
     ).toEqual(r.body);
@@ -79,6 +88,8 @@ describe("bot table API", () => {
         }
       ).state,
     ) as TableState;
+    expect(stored.startingReads).toEqual(s.reads);
+    expect(stored.policyVersion).toBe(2);
     expect(
       stored.players.reduce(
         (sum, p) => sum + p.stack + (stored.complete ? 0 : p.contributed),
