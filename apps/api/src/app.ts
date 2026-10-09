@@ -24,18 +24,33 @@ import {
   type TableState,
 } from "../../../packages/poker/src/table";
 import { analyzeTable } from "../../../packages/poker/src/table-review";
+import { gameStats, saveHandStats } from "./game-stats";
 export function createApp(db: Database.Database) {
   const app = express();
   app.use(express.json({ limit: "32kb" }));
+  // Preserve the latest available completed hand for tables created before game tracking.
+  for (const row of db.prepare("SELECT state FROM bot_tables").all() as {
+    state: string;
+  }[]) {
+    saveHandStats(db, JSON.parse(row.state));
+  }
+  app.get("/api/games", (_req, res) => res.json(gameStats(db)));
   app.post("/api/tables", (req, res) => {
     const { players } = tableCreateSchema.parse(req.body);
     const state = runBots(
       createTable(randomUUID(), players, randomInt(0, 4294967295)),
     );
-    db.prepare("INSERT INTO bot_tables VALUES(?,?)").run(
-      state.id,
-      JSON.stringify(state),
-    );
+    db.transaction(() => {
+      db.prepare("INSERT INTO bot_tables VALUES(?,?)").run(
+        state.id,
+        JSON.stringify(state),
+      );
+      db.prepare("INSERT INTO bot_games VALUES(?,?)").run(
+        state.id,
+        new Date().toISOString(),
+      );
+      saveHandStats(db, state);
+    })();
     res.status(201).json(tableView(state));
   });
   app.get("/api/tables/:id", (req, res) => {
@@ -51,6 +66,7 @@ export function createApp(db: Database.Database) {
       JSON.stringify(state),
       state.id,
     );
+    saveHandStats(db, state);
     res.json(tableView(state));
   });
   for (const route of ["actions", "next"] as const)
@@ -90,6 +106,7 @@ export function createApp(db: Database.Database) {
                 status: 400,
                 body: { error: "Finish the current hand first." },
               };
+            saveHandStats(db, state);
             state = createTable(
               state.id,
               state.players.length,
@@ -110,6 +127,7 @@ export function createApp(db: Database.Database) {
           return { status: 400, body: { error: (err as Error).message } };
         }
         analyzeTable(state);
+        saveHandStats(db, state);
         const view = tableView(state);
         db.prepare("UPDATE bot_tables SET state=? WHERE id=?").run(
           JSON.stringify(state),

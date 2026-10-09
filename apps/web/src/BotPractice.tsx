@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import type {
   BotProfile,
+  GameStats as Stats,
   TableAction,
   TableView,
 } from "../../../packages/shared/src/table";
 import { BotProfileDialog } from "./BotProfileDialog";
+import { GameStats } from "./GameStats";
 import { Cards } from "./Cards";
 import { RoundReview } from "./RoundReview";
 async function request<T>(path: string, body?: unknown): Promise<T> {
@@ -23,6 +25,23 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
   return data;
 }
 export function BotPractice() {
+  const [games, setGames] = useState<Stats[]>([]);
+  const [gamesError, setGamesError] = useState("");
+  const gamesRequest = useRef(0);
+  async function refreshGames() {
+    const sequence = ++gamesRequest.current;
+    try {
+      const response = await fetch("/api/games");
+      if (!response.ok) throw new Error("Could not load game stats.");
+      const nextGames: Stats[] = await response.json();
+      if (sequence !== gamesRequest.current) return;
+      setGames(nextGames);
+      setGamesError("");
+    } catch {
+      if (sequence !== gamesRequest.current) return;
+      setGamesError("Could not load game stats. Refresh to try again.");
+    }
+  }
   const [profile, setProfile] = useState<BotProfile | null>(null);
   const [table, setTable] = useState<TableView | null>(null),
     [count, setCount] = useState(2),
@@ -35,12 +54,14 @@ export function BotPractice() {
   const previousComplete = useRef(false);
   const save = (t: TableView) => {
     setTable(t);
+    void refreshGames();
     setCount(t.players.length);
     setRaiseTo(String(t.legal?.minRaiseTo ?? ""));
     localStorage.setItem("poker-practice-table", t.id);
   };
   useEffect(() => {
     let active = true;
+    void refreshGames();
     const id = localStorage.getItem("poker-practice-table");
     if (id) {
       inFlight.current = true;
@@ -70,6 +91,20 @@ export function BotPractice() {
     if (table && !table.complete) actionHeading.current?.focus();
     previousComplete.current = !!table?.complete;
   }, [table]);
+  async function resume(id: string) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      save(await request<TableView>("/" + id));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+      inFlight.current = false;
+    }
+  }
   async function start() {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -166,6 +201,17 @@ export function BotPractice() {
           Updating table…
         </p>
       )}
+      {gamesError && (
+        <p role="alert" className="error">
+          {gamesError}
+        </p>
+      )}
+      <GameStats
+        games={games}
+        currentId={table?.id}
+        busy={busy}
+        onResume={(id) => void resume(id)}
+      />
       {!table ? (
         <section className="panel">
           <h2>Play against local bots</h2>

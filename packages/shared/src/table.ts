@@ -118,3 +118,29 @@ export type DecisionReview = {
   model: string;
   rangeNote: string;
 };
+
+export type DecisionStat = {
+  street: string;
+  score: number;
+  loss: number;
+};
+export type HandStat = {
+  handNumber: number;
+  profit: number;
+  completedAt: string;
+  decisions: DecisionStat[];
+};
+export type GameStats = {
+  id: string;
+  startedAt: string;
+  players: number;
+  hands: number;
+  currentHand: number;
+  inProgress: boolean;
+  profit: number;
+  score: number | null;
+  decisions: number;
+  modelLoss: number;
+  streets: { street: string; score: number; decisions: number }[];
+  history: (HandStat & { score: number | null })[];
+};

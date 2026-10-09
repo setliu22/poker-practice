@@ -70,9 +70,15 @@ Range odds use 400 simulations, except heads-up river range odds which enumerate
 
 Call-price and pure-bluff break-even arithmetic is shown separately with its assumptions. Pure-bluff arithmetic assumes a loss whenever called; equity alone is never used to calculate betting EV. The full chronological action log and exact chip result remain available. Older saved hands are reconstructed from their recorded actions when that replay matches the saved state; otherwise reviews begin with new actions.
 
-The active table and its current hand are saved in SQLite; the browser remembers its ID so reloads and navigation resume it. Requests use revision checks and unique command IDs to prevent duplicate bets or duplicate next-hand deals. Bot tables are separate from exercise accuracy metrics, progress export, and “Clear progress.” Historical bot statistics, continuous stacks, selectable difficulty, and full-session export are future work.
+The active table and its current hand are saved in SQLite; the browser remembers its ID so reloads and navigation resume it. Requests use revision checks and unique command IDs to prevent duplicate bets or duplicate next-hand deals. Bot tables are separate from exercise accuracy metrics, progress export, and “Clear progress.” Each new table is a saved game accessible from **Games and stats**. Reopen any game, including one with an unfinished hand. Completed hand records persist in SQLite and are inserted once by table/hand ID, so retries and reloads never duplicate profit. Profit adds each hand’s final stack minus 1,000; stacks still reset each deal. The list shows start time, players, completed hands, profit and a postflop decision score, plus per-street and per-hand breakdowns.
+
+The decision score is a transparent teaching-model metric, separate from actual profit: for each postflop decision take the best tested action’s expected chip value minus the chosen action’s, subtract both sampling margins, floor at zero, then divide by the decision’s pot (minimum 10). Score is `max(0, 100 × (1 − adjusted loss / pot))`; game/street scores average their decisions. Only completed hands count. Preflop, missing reviews, actual revealed bot cards and the eventual outcome do not contribute. A 100 means no measurable regret against tested alternatives under the existing one-round assumptions, not optimal poker or a calibrated skill rating. The UI explains the formula and limitations.
+
+Migration 3 retains old saved tables and their latest available completed hand; older overwritten hands cannot be reconstructed. Legacy game start dates reflect when tracking was added. Continuous stacks, selectable difficulty, and full-session export remain future work.
 
 Bot API:
+
+- `GET /api/games` — saved games and completed-hand statistics.
 
 - `POST /api/tables` — `{players: 2..9}`
 - `GET /api/tables/:id` — current public table view
@@ -94,6 +100,7 @@ apps/web/           React + Vite; accessible responsive UI, local API requests
 apps/api/src/       Express routes, authored scenarios, generation/grading, database
 apps/api/migrations/001_initial.sql  Exercise storage (schema version 1)
 apps/api/migrations/002_bot_tables.sql  Saved bot tables and command receipts (version 2)
+apps/api/migrations/003_bot_games.sql   Game dates and completed-hand statistics (version 3)
 packages/poker/src/ Pure evaluator, deck, seeded deals, pot odds, range/equity logic
 packages/shared/src/ Zod request/exercise schemas and shared TypeScript types
  tests/             Vitest unit/integration tests and Playwright browser tests
@@ -131,9 +138,9 @@ On Linux, Playwright may require `npx playwright install --with-deps chromium`. 
 
 Verified during delivery:
 
-- **85 Vitest tests passing:** all hand categories/ranking order, kicker comparisons, wheel straights, board-only ties, seven-card selection, duplicates, odds/tolerance, blockers/empty ranges, ties, known turn outcomes, legal stronger categories, seeded generation, all 12 authored scenarios, independent scenario equity checks, input validation, reopened-database persistence, concurrent/repeated submissions, export/clear targeted selection, bot privacy, betting order, short-raise reopening, side-pot eligibility, odd chips, 200 complete seeded bot hands with chip conservation, range inference/blockers, future-information isolation, exact turn odds, multiway tie shares, cached/private reviews, old-hand reconstruction, eight distinct profiles, normalized/legal mixed size policies, position/draw/trapping behavior, multiway bluff reduction, smoothed adaptation, public-only observations, and policy version compatibility.
+- **89 Vitest tests passing:** all hand categories/ranking order, kicker comparisons, wheel straights, board-only ties, seven-card selection, duplicates, odds/tolerance, blockers/empty ranges, ties, known turn outcomes, legal stronger categories, seeded generation, all 12 authored scenarios, independent scenario equity checks, input validation, reopened-database persistence, concurrent/repeated submissions, export/clear targeted selection, bot privacy, betting order, short-raise reopening, side-pot eligibility, odd chips, 200 complete seeded bot hands with chip conservation, range inference/blockers, future-information isolation, exact turn odds, multiway tie shares, cached/private reviews, old-hand reconstruction, eight distinct profiles, normalized/legal mixed size policies, position/draw/trapping behavior, multiway bluff reduction, smoothed adaptation, public-only observations, policy version compatibility, pot-normalized decision scoring, game profit aggregation, and saved-game persistence/idempotency.
 - **300 seeded showdown comparisons** inside the evaluator verification test against independent MIT-licensed `pokersolver`. Expected category fixtures and known odds/equity cases are independently specified, not produced by the implementation under test.
-- **16 Playwright cases:** desktop and phone exercise/feedback flows, progress updates, keyboard submission/focus, all modes including turn equity, mobile overflow/card readability, searchable reference, clear/cancel confirmation, zero external network requests during practice, playing/resuming 2-, 6-, and 9-player bot tables, and named playstyle dialogs with keyboard dismissal/focus restoration and mobile bounds.
+- **18 Playwright cases:** desktop and phone exercise/feedback flows, progress updates, keyboard submission/focus, all modes including turn equity, mobile overflow/card readability, searchable reference, clear/cancel confirmation, zero external network requests during practice, playing/resuming 2-, 6-, and 9-player bot tables, and named playstyle dialogs with keyboard dismissal/focus restoration mobile bounds, saved-game profit, reopening games, and score explanations.
 - **Production build:** TypeScript checking, Vite assets, and bundled Node API.
 
 Screenshots captured by the browser tests are available in ignored `test-results/` for visual inspection.

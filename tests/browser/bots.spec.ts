@@ -132,3 +132,52 @@ test("named opponents have optional playstyle dialogs with keyboard dismissal an
     ),
   ).toBe(true);
 });
+
+test("saved games retain profit and can be reopened with score explanations", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Start table", exact: true }).click();
+  await page.getByRole("button", { name: "Fold", exact: true }).click();
+  const stats = page.getByRole("region", { name: "Games and stats" });
+  await expect(
+    stats.locator(".game-metrics").getByText("-5 chips", { exact: true }),
+  ).toBeVisible();
+  await stats
+    .getByText("How is the score calculated?", { exact: true })
+    .click();
+  await expect(
+    stats.getByText(/Winning or losing the hand does not change/),
+  ).toBeVisible();
+  await stats.getByText("Completed hands", { exact: true }).click();
+  await expect(
+    stats.getByText("No postflop score", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "New table", exact: true }).click();
+  await stats.getByText(/^Saved games \(/).click();
+  const previous = stats
+    .locator(".saved-game")
+    .filter({ hasText: "-5 chips" })
+    .first();
+  await previous
+    .getByRole("button", { name: "Open game", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Hand complete", exact: true }),
+  ).toBeVisible();
+  await expect(
+    stats.locator(".game-metrics").getByText("-5 chips", { exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await expect(
+    stats.locator(".game-metrics").getByText("-5 chips", { exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await stats.screenshot({ path: test.info().outputPath("game-stats.png") });
+});
