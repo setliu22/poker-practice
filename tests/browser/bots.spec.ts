@@ -133,51 +133,162 @@ test("named opponents have optional playstyle dialogs with keyboard dismissal an
   ).toBe(true);
 });
 
-test("saved games retain profit and can be reopened with score explanations", async ({
+test("saved games retain profit, show charts and can be reopened", async ({
   page,
 }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Bot table", exact: true }).click();
   await page.getByRole("button", { name: "Start table", exact: true }).click();
+  const name = await page.locator(".active-game-strip strong").innerText();
   await page.getByRole("button", { name: "Fold", exact: true }).click();
-  const stats = page.getByRole("region", { name: "Games and stats" });
+  await page.getByRole("button", { name: "View stats", exact: true }).click();
+  const detail = page.locator(".game-detail");
   await expect(
-    stats.locator(".game-metrics").getByText("-5 chips", { exact: true }),
+    detail.locator(".game-metrics").getByText("-5 chips", { exact: true }),
   ).toBeVisible();
-  await stats
-    .getByText("How is the score calculated?", { exact: true })
+  const chart = page.getByRole("group", {
+    name: "Profit over time, 1 recorded hands",
+  });
+  await expect(chart).toBeVisible();
+  await chart.getByRole("button").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".chart-readout")).toHaveText(
+    /Hand 1.*cumulative profit/,
+  );
+  await expect(
+    page.getByText("No scored decisions yet", { exact: true }),
+  ).toBeVisible();
+  await detail.getByText("About the decision score", { exact: true }).click();
+  await expect(
+    detail.getByText(/Winning or losing the hand does not change/),
+  ).toBeVisible();
+  await detail.getByText("Hand results (1)", { exact: true }).click();
+  await expect(
+    detail.getByRole("cell", { name: "-5", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "New game", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Start table", exact: true }),
+  ).toBeFocused();
+  await page.getByRole("button", { name: "Start table", exact: true }).click();
+  await page.getByRole("button", { name: "Games", exact: true }).click();
+  await page
+    .getByRole("button", { name: `View ${name} stats`, exact: true })
     .click();
-  await expect(
-    stats.getByText(/Winning or losing the hand does not change/),
-  ).toBeVisible();
-  await stats.getByText("Completed hands", { exact: true }).click();
-  await expect(
-    stats.getByText("No postflop score", { exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "New table", exact: true }).click();
-  await stats.getByText(/^Saved games \(/).click();
-  const previous = stats
-    .locator(".saved-game")
-    .filter({ hasText: "-5 chips" })
-    .first();
-  await previous
-    .getByRole("button", { name: "Open game", exact: true })
+  await detail
+    .getByRole("button", { name: "Back to table", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "Hand complete", exact: true }),
   ).toBeVisible();
-  await expect(
-    stats.locator(".game-metrics").getByText("-5 chips", { exact: true }),
-  ).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Poker table" })).toBeVisible();
+  await page.getByRole("button", { name: "View stats", exact: true }).click();
   await expect(
-    stats.locator(".game-metrics").getByText("-5 chips", { exact: true }),
+    detail.locator(".game-metrics").getByText("-5 chips", { exact: true }),
   ).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
-  await stats.screenshot({ path: test.info().outputPath("game-stats.png") });
+  await page.getByText("About the decision score", { exact: true }).click();
+  await page
+    .getByRole("region", { name: "Games and stats" })
+    .screenshot({ path: test.info().outputPath("game-library.png") });
+});
+
+test("game deletion supports cancel, retry, deleting another game and deleting the active game", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Start table", exact: true }).click();
+  await expect(page.locator(".active-game-strip strong")).toBeVisible();
+  const first = await page.evaluate(() =>
+    localStorage.getItem("poker-practice-table"),
+  );
+  const firstName = await page.locator(".active-game-strip strong").innerText();
+  await page.getByRole("button", { name: "Games", exact: true }).click();
+  await page.getByRole("button", { name: "New game", exact: true }).click();
+  await page.getByRole("button", { name: "Start table", exact: true }).click();
+  await expect(page.locator(".active-game-strip strong")).toBeVisible();
+  const second = await page.evaluate(() =>
+    localStorage.getItem("poker-practice-table"),
+  );
+  const secondName = await page
+    .locator(".active-game-strip strong")
+    .innerText();
+  await page.getByRole("button", { name: "Games", exact: true }).click();
+  await page
+    .getByRole("button", { name: `View ${firstName} stats`, exact: true })
+    .click();
+  await page.getByRole("button", { name: "Delete game", exact: true }).click();
+  let dialog = page.getByRole("dialog", {
+    name: `Delete ${firstName}?`,
+    exact: true,
+  });
+  await expect(
+    dialog.getByRole("button", { name: "Cancel", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Delete game", exact: true }),
+  ).toBeFocused();
+  await page.getByRole("button", { name: "Delete game", exact: true }).click();
+  await dialog
+    .getByRole("button", { name: "Delete game", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: `View ${firstName} stats`, exact: true }),
+  ).toHaveCount(0);
+  expect((await request.get(`/api/tables/${first}`)).status()).toBe(404);
+  expect(
+    await page.evaluate(() => localStorage.getItem("poker-practice-table")),
+  ).toBe(second);
+  await page
+    .getByRole("button", { name: `View ${secondName} stats`, exact: true })
+    .click();
+  await page.getByRole("button", { name: "Delete game", exact: true }).click();
+  dialog = page.getByRole("dialog", {
+    name: `Delete ${secondName}?`,
+    exact: true,
+  });
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: "Delete game", exact: true }).click();
+  await page.route(`**/api/games/${second}`, (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Could not delete this game." }),
+    }),
+  );
+  await dialog
+    .getByRole("button", { name: "Delete game", exact: true })
+    .click();
+  await expect(dialog.getByRole("alert")).toHaveText(
+    "Could not delete this game.",
+  );
+  await expect(dialog).toBeVisible();
+  await page.unroute(`**/api/games/${second}`);
+  await dialog
+    .getByRole("button", { name: "Delete game", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Games", exact: true }),
+  ).toBeFocused();
+  expect(
+    await page.evaluate(() => localStorage.getItem("poker-practice-table")),
+  ).toBeNull();
+  expect((await request.get(`/api/tables/${second}`)).status()).toBe(404);
+  await page.reload();
+  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Start table", exact: true }),
+  ).toBeVisible();
 });

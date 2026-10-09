@@ -91,6 +91,14 @@ export type ActionValue = {
 };
 export type DecisionReview = {
   id: number;
+  analysisVersion?: number;
+  comparisons?: {
+    key: string;
+    difference: number;
+    margin: number;
+    samples: number;
+    clear: boolean;
+  }[];
   street: string;
   board: string[];
   hero: string[];
@@ -121,17 +129,25 @@ export type DecisionReview = {
 
 export type DecisionStat = {
   street: string;
-  score: number;
-  loss: number;
+  score: number | null;
+  loss: number | null;
+  status?: "scored" | "inconclusive" | "legacy";
+  reason?: string;
 };
 export type HandStat = {
   handNumber: number;
   profit: number;
   completedAt: string;
+  scoringVersion?: number;
   decisions: DecisionStat[];
 };
+export const gameDeleteSchema = z
+  .object({ revision: z.number().int().nonnegative() })
+  .strict();
 export type GameStats = {
   id: string;
+  gameNumber: number;
+  revision: number;
   startedAt: string;
   players: number;
   hands: number;
@@ -140,6 +156,8 @@ export type GameStats = {
   profit: number;
   score: number | null;
   decisions: number;
+  scoredDecisions: number;
+  unscoredDecisions: number;
   modelLoss: number;
   streets: { street: string; score: number; decisions: number }[];
   history: (HandStat & { score: number | null })[];

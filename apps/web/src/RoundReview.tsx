@@ -85,35 +85,66 @@ export function RoundReview({
                   <thead>
                     <tr>
                       <th>Action</th>
-                      <th>Average chips</th>
-                      <th>Simulation uncertainty</th>
+                      <th>Expected chips</th>
+                      <th>Difference vs your choice</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {r.values.map((v) => (
-                      <tr
-                        key={v.key}
-                        className={v.key === r.chosenKey ? "chosen-action" : ""}
-                      >
-                        <th>
-                          {v.label}
-                          {v.key === r.chosenKey ? " · You chose this" : ""}
-                        </th>
-                        <td>
-                          {v.chips >= 0 ? "+" : ""}
-                          {v.chips.toFixed(1)}
-                        </td>
-                        <td>
-                          {v.exact ? "Exact" : `± ${v.margin.toFixed(1)} chips`}
-                        </td>
-                      </tr>
-                    ))}
+                    {r.values.map((v) => {
+                      const comparison = r.comparisons?.find(
+                        (c) => c.key === v.key,
+                      );
+                      return (
+                        <tr
+                          key={v.key}
+                          className={
+                            v.key === r.chosenKey ? "chosen-action" : ""
+                          }
+                        >
+                          <th>
+                            {v.label}
+                            {v.key === r.chosenKey ? " · You chose this" : ""}
+                          </th>
+                          <td>
+                            {v.chips >= 0 ? "+" : ""}
+                            {v.chips.toFixed(1)}
+                            <small className="value-precision">
+                              {v.exact
+                                ? "Exact under model"
+                                : `± ${v.margin.toFixed(1)} sampling`}
+                            </small>
+                          </td>
+                          <td>
+                            {comparison ? (
+                              <>
+                                {comparison.difference >= 0 ? "+" : ""}
+                                {comparison.difference.toFixed(1)}
+                                {comparison.samples
+                                  ? ` ± ${comparison.margin.toFixed(1)}`
+                                  : ""}
+                                <small className="value-precision">
+                                  {comparison.samples
+                                    ? "Paired sampling interval"
+                                    : "Exact under model"}
+                                </small>
+                              </>
+                            ) : v.key === r.chosenKey ? (
+                              "Baseline"
+                            ) : (
+                              "Unavailable"
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
               <p className="quiet">
-                Uncertainty is an approximate 95% sampling interval, not a
-                measure of how realistic the model is.
+                Positive differences favor the alternative. Intervals measure
+                sampling noise only; they do not measure how realistic the bots
+                are. Exact means exact under these bot rules, not optimal
+                against real players.
               </p>
               <details className="model-details">
                 <summary>How this comparison works</summary>

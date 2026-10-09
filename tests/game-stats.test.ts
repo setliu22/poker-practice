@@ -15,6 +15,16 @@ import { createTable } from "../packages/poker/src/table";
 import type { DecisionReview } from "../packages/shared/src/table";
 function round(gap = 30, margin = 5, pot = 100): DecisionReview {
   return {
+    analysisVersion: 2,
+    comparisons: [
+      {
+        key: "raise",
+        difference: gap,
+        margin,
+        samples: 640,
+        clear: gap > margin,
+      },
+    ],
     street: "flop",
     chosenKey: "check",
     pot,
@@ -25,21 +35,23 @@ function round(gap = 30, margin = 5, pot = 100): DecisionReview {
   } as DecisionReview;
 }
 describe("game decision scoring", () => {
-  it("scores independently known pot-normalized loss after allowing sampling uncertainty", () => {
-    expect(scoreDecision(round())).toEqual({
+  it("scores independently known pot-normalized regret only when sufficiently precise", () => {
+    expect(scoreDecision(round())).toMatchObject({
       street: "flop",
-      loss: 20,
-      score: 80,
+      loss: 30,
+      score: 70,
+      status: "scored",
     });
-    expect(scoreDecision(round(8))).toEqual({
-      street: "flop",
-      loss: 0,
-      score: 100,
+    expect(scoreDecision(round(8))).toMatchObject({
+      score: null,
+      loss: null,
+      status: "inconclusive",
     });
-    expect(scoreDecision(round(200, 0))).toEqual({
+    expect(scoreDecision(round(200, 0))).toMatchObject({
       street: "flop",
       loss: 200,
       score: 0,
+      status: "scored",
     });
     expect(scoreDecision(round(5, 0, 0))?.score).toBe(50);
   });
@@ -92,11 +104,11 @@ describe("game decision scoring", () => {
       const game = gameStats(db)[0];
       expect(game.hands).toBe(2);
       expect(game.profit).toBe(20);
-      expect(game.score).toBe(73);
+      expect(game.score).toBe(70);
       expect(game.decisions).toBe(3);
-      expect(game.modelLoss).toBe(80);
+      expect(game.modelLoss).toBe(90);
       expect(game.streets).toEqual([
-        { street: "flop", score: 80, decisions: 1 },
+        { street: "flop", score: 70, decisions: 1 },
         { street: "turn", score: 100, decisions: 1 },
         { street: "river", score: 40, decisions: 1 },
       ]);
@@ -125,7 +137,7 @@ describe("game decision scoring", () => {
         score: null,
         decisions: 0,
       });
-      await request(app)
+      const next = await request(app)
         .post(`/api/tables/${first.body.id}/next`)
         .send({ revision: 1, actionId: randomUUID() });
       await request(app).post("/api/tables").send({ players: 3 });
@@ -133,7 +145,7 @@ describe("game decision scoring", () => {
       expect(games).toHaveLength(2);
       expect(
         games.find((g: { id: string }) => g.id === first.body.id).profit,
-      ).toBe(-5);
+      ).toBe(-5 + (next.body.complete ? next.body.players[0].stack - 1000 : 0));
       expect(JSON.stringify(games)).not.toContain('"hole"');
       db.close();
       db = openDatabase(join(dir, "games.sqlite"));
@@ -144,4 +156,185 @@ describe("game decision scoring", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+});
+
+describe("game management", () => {
+  it("deletes only the selected game and its receipts/stats, with safe retries and stable numbering", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "poker-delete-"));
+    let db = openDatabase(join(dir, "games.sqlite"));
+    try {
+      let app = createApp(db);
+      const first = (
+        await request(app).post("/api/tables").send({ players: 2 })
+      ).body;
+      const second = (
+        await request(app).post("/api/tables").send({ players: 2 })
+      ).body;
+      const command = { revision: 0, actionId: randomUUID(), action: "fold" };
+      await request(app).post(`/api/tables/${first.id}/actions`).send(command);
+      expect(
+        (
+          await request(app)
+            .delete(`/api/games/${first.id}`)
+            .send({ revision: 1 })
+        ).status,
+      ).toBe(204);
+      expect(
+        (
+          await request(app)
+            .delete(`/api/games/${first.id}`)
+            .send({ revision: 1 })
+        ).status,
+      ).toBe(204);
+      for (const table of [
+        "bot_tables",
+        "bot_games",
+        "bot_commands",
+        "bot_hand_stats",
+        "bot_game_numbers",
+      ]) {
+        const key = table === "bot_tables" ? "id" : "table_id";
+        expect(
+          db
+            .prepare(`SELECT count(*) AS count FROM ${table} WHERE ${key}=?`)
+            .get(first.id),
+        ).toEqual({ count: 0 });
+      }
+      expect(
+        (
+          await request(app)
+            .post(`/api/tables/${first.id}/actions`)
+            .send(command)
+        ).status,
+      ).toBe(404);
+      const third = (
+        await request(app).post("/api/tables").send({ players: 3 })
+      ).body;
+      let games = (await request(app).get("/api/games")).body;
+      expect(games.map((g: { gameNumber: number }) => g.gameNumber)).toEqual([
+        3, 2,
+      ]);
+      expect((await request(app).get(`/api/tables/${second.id}`)).status).toBe(
+        200,
+      );
+      db.close();
+      db = openDatabase(join(dir, "games.sqlite"));
+      app = createApp(db);
+      expect((await request(app).get(`/api/tables/${first.id}`)).status).toBe(
+        404,
+      );
+      expect((await request(app).get("/api/games")).body).toEqual(games);
+      expect(games[0].id).toBe(third.id);
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  it("validates deletion and rejects stale revisions without changing a game", async () => {
+    const db = openDatabase(":memory:");
+    try {
+      const app = createApp(db);
+      const game = (await request(app).post("/api/tables").send({ players: 2 }))
+        .body;
+      for (const body of [
+        {},
+        { revision: -1 },
+        { revision: 0, unexpected: true },
+      ]) {
+        expect(
+          (await request(app).delete(`/api/games/${game.id}`).send(body))
+            .status,
+        ).toBe(400);
+      }
+      await request(app)
+        .post(`/api/tables/${game.id}/actions`)
+        .send({ revision: 0, actionId: randomUUID(), action: "fold" });
+      expect(
+        (
+          await request(app)
+            .delete(`/api/games/${game.id}`)
+            .send({ revision: 0 })
+        ).status,
+      ).toBe(409);
+      expect((await request(app).get("/api/games")).body[0]).toMatchObject({
+        revision: 1,
+        hands: 1,
+        profit: -5,
+      });
+    } finally {
+      db.close();
+    }
+  });
+  it("rolls back dependent deletions when deleting the table fails", async () => {
+    const db = openDatabase(":memory:");
+    try {
+      const app = createApp(db);
+      const game = (await request(app).post("/api/tables").send({ players: 2 }))
+        .body;
+      await request(app)
+        .post(`/api/tables/${game.id}/actions`)
+        .send({ revision: 0, actionId: randomUUID(), action: "fold" });
+      db.exec(
+        "CREATE TRIGGER refuse_table_delete BEFORE DELETE ON bot_tables BEGIN SELECT RAISE(ABORT, 'test failure'); END",
+      );
+      const result = await request(app)
+        .delete(`/api/games/${game.id}`)
+        .send({ revision: 1 });
+      expect(result.status).toBe(500);
+      for (const table of [
+        "bot_tables",
+        "bot_games",
+        "bot_commands",
+        "bot_hand_stats",
+        "bot_game_numbers",
+      ]) {
+        const key = table === "bot_tables" ? "id" : "table_id";
+        expect(
+          db
+            .prepare(`SELECT count(*) AS count FROM ${table} WHERE ${key}=?`)
+            .get(game.id),
+        ).toEqual({ count: 1 });
+      }
+    } finally {
+      db.close();
+    }
+  });
+});
+
+it("does not include obsolete optimistic scores in game averages or charts", () => {
+  const db = openDatabase(":memory:");
+  try {
+    const state = createTable("legacy-score", 2, 1);
+    db.prepare("INSERT INTO bot_tables VALUES(?,?)").run(
+      state.id,
+      JSON.stringify(state),
+    );
+    db.prepare("INSERT INTO bot_games VALUES(?,?)").run(
+      state.id,
+      "2026-10-08T00:00:00Z",
+    );
+    db.prepare("INSERT INTO bot_hand_stats VALUES(?,?,?)").run(
+      state.id,
+      1,
+      JSON.stringify({
+        handNumber: 1,
+        profit: 20,
+        completedAt: "2026-10-08T01:00:00Z",
+        decisions: [{ street: "flop", score: 100, loss: 0 }],
+      }),
+    );
+    expect(gameStats(db)[0]).toMatchObject({
+      profit: 20,
+      score: null,
+      decisions: 1,
+      scoredDecisions: 0,
+      unscoredDecisions: 1,
+    });
+    expect(gameStats(db)[0].history[0]).toMatchObject({
+      score: null,
+      decisions: [{ status: "legacy", score: null, loss: null }],
+    });
+  } finally {
+    db.close();
+  }
 });

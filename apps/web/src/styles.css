@@ -1657,9 +1657,6 @@ footer {
   }
 }
 
-.saved-games {
-  margin-bottom: 1.5rem;
-}
 .game-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1683,32 +1680,6 @@ footer {
 .game-metrics strong {
   font-size: 1.4rem;
 }
-.saved-games details {
-  margin-top: 1rem;
-}
-.saved-games summary {
-  cursor: pointer;
-  padding: 0.5rem 0;
-}
-.saved-game {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1rem 0;
-  border-top: 1px solid var(--border);
-}
-.saved-game p {
-  margin: 0.35rem 0;
-}
-.game-hand-list > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  justify-content: space-between;
-  padding: 0.75rem 0;
-  border-top: 1px solid var(--border);
-}
 @media (max-width: 600px) {
   .game-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1723,8 +1694,300 @@ footer {
   .game-metrics > div {
     padding: 0.75rem;
   }
-  .saved-game {
-    align-items: flex-start;
+}
+
+.bot-view-nav {
+  display: flex;
+  gap: 0.3rem;
+  border-bottom: 1px solid var(--border);
+  margin: 0 0 1.3rem;
+}
+.bot-view-nav button {
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 0.7rem 1.2rem;
+}
+.bot-view-nav button.selected {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.active-game-strip {
+  display: flex;
+  gap: 1.2rem;
+  align-items: center;
+  flex-wrap: wrap;
+  color: var(--muted);
+  margin: 0 0 1.2rem;
+}
+.active-game-strip strong {
+  color: #e9eef7;
+}
+.active-game-strip button {
+  margin-left: auto;
+  padding: 0.4rem 0.75rem;
+}
+.library-heading,
+.game-detail-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+.library-heading h2,
+.game-detail-heading h2 {
+  margin: 0;
+}
+.library-heading p,
+.game-detail-heading p {
+  margin: 0.35rem 0 0;
+}
+.game-library-grid {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 1.2rem;
+  align-items: start;
+}
+.games-list {
+  padding: 1rem;
+}
+.games-list label {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-right: 0.5rem;
+}
+.games-list select {
+  max-width: 100%;
+  font-size: 0.85rem;
+}
+.game-list-items {
+  max-height: 560px;
+  overflow: auto;
+  margin: 0.9rem -0.3rem 0;
+  padding: 0.3rem;
+}
+.game-list-item {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 0.8rem;
+  margin: 0 0 0.4rem;
+  gap: 0.35rem;
+}
+.game-list-item.selected {
+  background: #192940;
+  border-color: #45618a;
+}
+.game-list-item .quiet {
+  font-size: 0.8rem;
+}
+.game-list-title {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.6rem;
+  font-weight: 600;
+}
+.game-list-title > span {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.game-detail {
+  min-width: 0;
+}
+.game-management {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.delete-game-button {
+  color: #f2a1aa;
+}
+.stats-caption {
+  font-size: 0.85rem;
+}
+.stats-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+.stat-chart {
+  border: 1px solid var(--border);
+  background: #101824;
+  border-radius: 0.7rem;
+  padding: 1rem;
+  min-width: 0;
+}
+.chart-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: center;
+}
+.chart-heading h3 {
+  font-size: 0.9rem;
+  margin: 0;
+}
+.chart-heading strong {
+  font-size: 1rem;
+  white-space: nowrap;
+  color: var(--accent);
+}
+.stat-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0.75rem 0 0;
+  overflow: visible;
+}
+.stat-chart svg text {
+  fill: var(--muted);
+  font-size: 16px;
+}
+.chart-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.chart-zero {
+  stroke: #74839a;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+.chart-line {
+  stroke: var(--accent);
+  fill: none;
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+.chart-dot {
+  fill: var(--accent);
+}
+.chart-hit {
+  fill: transparent;
+  stroke: transparent;
+  cursor: pointer;
+}
+.chart-hit:focus-visible {
+  outline: none;
+  stroke: #fff;
+  stroke-width: 2;
+}
+.chart-readout {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  min-height: 2.6em;
+}
+.chart-empty {
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  color: var(--muted);
+}
+.chart-empty p {
+  margin: 0 0 0.3rem;
+}
+.chart-empty small {
+  max-width: 240px;
+}
+.street-scores {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 1rem 0;
+}
+.street-scores > div {
+  display: flex;
+  gap: 0.3rem;
+  flex-direction: column;
+  padding: 0.7rem 1rem;
+  border-left: 2px solid #45618a;
+}
+.street-scores span {
+  text-transform: capitalize;
+}
+.street-scores small {
+  color: var(--muted);
+}
+.hand-results-scroll {
+  overflow-x: auto;
+}
+.hand-results {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  text-align: left;
+}
+.hand-results td,
+.hand-results th {
+  padding: 0.75rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.hand-results thead {
+  color: var(--muted);
+}
+.dialog-actions {
+  display: flex;
+  gap: 0.7rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+}
+.danger {
+  border: 1px solid #ca6371;
+  background: #6b2631;
+  color: #fff;
+}
+.library-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+}
+@media (max-width: 1100px) {
+  .stats-charts {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 760px) {
+  .game-library-grid {
+    grid-template-columns: 1fr;
+  }
+  .game-list-items {
+    max-height: 230px;
+  }
+  .game-detail-heading {
     flex-direction: column;
   }
+  .game-management {
+    width: 100%;
+  }
+  .game-management > button {
+    flex: 1;
+  }
+  .active-game-strip {
+    gap: 0.6rem 1rem;
+    font-size: 0.85rem;
+  }
+  .game-detail {
+    padding: 1rem;
+  }
+  .stat-chart {
+    padding: 0.75rem;
+  }
+}
+.value-precision {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 0.2rem;
 }

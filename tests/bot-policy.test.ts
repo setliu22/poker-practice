@@ -62,6 +62,44 @@ const facing = {
   maxRaiseTo: 900,
 };
 describe("contextual bot personalities", () => {
+  it("never folds an unbeatable shared straight or quads, but does not lock a flush-vulnerable straight", () => {
+    for (const board of [
+      ["Tc", "Jd", "Qh", "Ks", "Ac"],
+      ["2c", "2d", "2h", "2s", "Ac"],
+    ]) {
+      const o = observation({ hole: ["7d", "8d"], board, legal: facing });
+      expect(handFeatures(o.hole, board).lockedBoard).toBe(true);
+      expect(call(o)).toBe(1);
+      expect(raise(o)).toBe(0);
+    }
+    expect(
+      handFeatures(["7d", "8d"], ["Tc", "Jc", "Qc", "Ks", "Ah"]).lockedBoard,
+    ).toBe(false);
+    // A king-high straight board can lose to an ace in the opponent's hand.
+    expect(
+      handFeatures(["7d", "8d"], ["9c", "Td", "Jh", "Qs", "Kc"]).lockedBoard,
+    ).toBe(false);
+  });
+  it("recognizes nut-flush draws when the ace or higher suited cards are on the board", () => {
+    expect(
+      handFeatures(["Kh", "2c"], ["Ah", "7h", "8d", "3h"]).nutFlushDraw,
+    ).toBe(true);
+    expect(
+      handFeatures(["Qh", "2c"], ["Ah", "Kh", "8d", "3h"]).nutFlushDraw,
+    ).toBe(true);
+    expect(
+      handFeatures(["Qh", "2c"], ["Ah", "7h", "8d", "3h"]).nutFlushDraw,
+    ).toBe(false);
+  });
+  it("counts a bet already in front of an opponent toward the effective stack", () => {
+    const s = createTable("effective", 2, 9);
+    act(s, 0, "raise", 900);
+    const o = botObservation(s);
+    // Hero has 100 behind plus 900 committed; bot has 990 behind and 10 committed.
+    expect(o.stack).toBe(990);
+    expect(o.effectiveStack).toBe(990);
+    expect(o.legal.toCall).toBe(890);
+  });
   it("deals eight distinct named opponents with public, non-secret profiles", () => {
     const s = createTable("roster", 9, 1),
       bots = tableView(s).players.slice(1);

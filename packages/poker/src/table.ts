@@ -306,6 +306,9 @@ export function act(
   action: TableAction,
   amount?: number,
 ) {
+  // Reject malformed runtime input before recording a decision or public read.
+  if (!["fold", "check", "call", "raise"].includes(action))
+    throw new Error("Unknown action.");
   const legal = legalActions(s, seat);
   if (!legal) throw new Error("It is not this player’s turn.");
   const p = s.players[seat];
@@ -514,7 +517,7 @@ export function botObservation(s: TableState, seat = s.actor!): BotObservation {
         0,
         ...active(s)
           .filter((q) => q.seat !== seat)
-          .map((q) => q.stack),
+          .map((q) => Math.max(0, q.stack + q.streetBet - p.streetBet)),
       ),
     ),
     history: structuredClone(s.actions ?? []),

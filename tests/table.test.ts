@@ -25,6 +25,12 @@ function street(count = 3): TableState {
   return s;
 }
 describe("table rules", () => {
+  it("rejects unknown runtime actions without mutating the hand or recorded reads", () => {
+    const s = createTable("invalid", 2, 5);
+    const before = structuredClone(s);
+    expect(() => act(s, 0, "dance" as never)).toThrow("Unknown action");
+    expect(s).toEqual(before);
+  });
   it("accepts 2–9 players and deals unique cards", () => {
     for (let n = 2; n <= 9; n++) {
       const s = createTable("x", n, 4);

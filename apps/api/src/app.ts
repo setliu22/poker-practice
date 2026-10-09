@@ -12,6 +12,7 @@ import {
 } from "../../../packages/shared/src/index";
 import { generate, grade, type Specification } from "./exercises";
 import {
+  gameDeleteSchema,
   tableCreateSchema,
   tableActionSchema,
   tableNextSchema,
@@ -35,6 +36,36 @@ export function createApp(db: Database.Database) {
     saveHandStats(db, JSON.parse(row.state));
   }
   app.get("/api/games", (_req, res) => res.json(gameStats(db)));
+  app.delete("/api/games/:id", (req, res) => {
+    const { revision } = gameDeleteSchema.parse(req.body);
+    const status = db.transaction(() => {
+      const row = db
+        .prepare(
+          "SELECT json_extract(state,'$.revision') AS revision FROM bot_tables WHERE id=?",
+        )
+        .get(req.params.id) as { revision: number } | undefined;
+      if (!row) return 204; // A retry of a successful deletion is safe.
+      if (row.revision !== revision) return 409;
+      for (const table of [
+        "bot_commands",
+        "bot_hand_stats",
+        "bot_game_numbers",
+        "bot_games",
+      ]) {
+        db.prepare(`DELETE FROM ${table} WHERE table_id=?`).run(req.params.id);
+      }
+      db.prepare("DELETE FROM bot_tables WHERE id=?").run(req.params.id);
+      return 204;
+    })();
+    if (status === 409)
+      res
+        .status(409)
+        .json({
+          error:
+            "This game changed in another tab. Review its latest stats before deleting.",
+        });
+    else res.status(204).end();
+  });
   app.post("/api/tables", (req, res) => {
     const { players } = tableCreateSchema.parse(req.body);
     const state = runBots(
@@ -48,6 +79,9 @@ export function createApp(db: Database.Database) {
       db.prepare("INSERT INTO bot_games VALUES(?,?)").run(
         state.id,
         new Date().toISOString(),
+      );
+      db.prepare("INSERT INTO bot_game_numbers(table_id) VALUES(?)").run(
+        state.id,
       );
       saveHandStats(db, state);
     })();

@@ -11,6 +11,7 @@ import {
   inferredRange,
   probability,
   recoverFrames,
+  valueModel,
 } from "../packages/poker/src/table-review";
 function frame(count = 2): DecisionFrame {
   const s = createTable("fixture", count, 44);
@@ -154,6 +155,10 @@ describe("decision review calculations", () => {
     expect(call.chips).toBe(20); // half of 60 minus new call of 10
     expect(s.rounds![0].callThreshold).toBeCloseTo(100 / 6);
     expect(s.rounds![0].rangeProbability.share).toBeCloseTo(50);
+    const fold = s.rounds![0].comparisons!.find((c) => c.key === "fold")!;
+    expect(fold.difference).toBe(-20);
+    expect(fold.margin).toBe(0);
+    expect(fold.samples).toBe(0);
   });
   it("recovers decision snapshots from an older saved hand history", () => {
     const s = createTable("old", 2, 1);
@@ -166,5 +171,108 @@ describe("decision review calculations", () => {
     delete s.policyEvents;
     recoverFrames(s);
     expect(s.decisions).toEqual(expected);
+  });
+  it("conditions a multiway joint range on collisions without sequential-seat bias", () => {
+    const f = frame(3);
+    f.board = ["2c", "3d", "7h", "9s", "Jc"];
+    f.players[0].hole = ["Qs", "Qh"];
+    const ranges = new Map([
+      [
+        1,
+        [
+          { cards: ["Ks", "Kh"], weight: 0.9 },
+          { cards: ["Ts", "Th"], weight: 0.1 },
+        ],
+      ],
+      [
+        2,
+        [
+          { cards: ["Ks", "Kd"], weight: 0.9 },
+          { cards: ["8s", "8h"], weight: 0.1 },
+        ],
+      ],
+    ]);
+    // KK/KK is illegal. Of legal mass .09 + .09 + .01, hero only wins .01.
+    // Sequentially renormalizing the second seat would incorrectly give 1%.
+    const result = probability(f, ranges, 330);
+    expect(result.share).toBeCloseTo(100 / 19, -0.5);
+  });
+  it("reports paired comparisons without claiming an inconclusive action was good", () => {
+    const s = createTable("paired-review", 2, 1);
+    act(s, 0, "call");
+    runBots(s);
+    analyzeTable(s);
+    const r = s.rounds![0];
+    expect(r.analysisVersion).toBe(3);
+    expect(r.comparisons).toHaveLength(r.values.length - 1);
+    for (const c of r.comparisons!) {
+      const chosen = r.values.find((v) => v.key === r.chosenKey)!;
+      const alternative = r.values.find((v) => v.key === c.key)!;
+      expect(c.difference).toBeCloseTo(alternative.chips - chosen.chips);
+      expect(c.samples).toBe(640);
+      expect(c.clear).toBe(c.difference > c.margin);
+      expect(c.margin).toBeGreaterThanOrEqual(0);
+    }
+    expect(r.model).toContain("not incorrect bot assumptions");
+    expect(r.values.every((v) => !("outcomes" in v))).toBe(true);
+    if (!r.comparisons!.some((c) => c.clear))
+      expect(r.explanation).toContain("not evidence your action was good");
+    const copy = structuredClone(s);
+    copy.rounds![0].analysisVersion = 1;
+    copy.rounds![0].verdict = "stale";
+    analyzeTable(copy);
+    expect(copy.rounds).toEqual(s.rounds);
+  });
+  it("enumerates river bets, folds, calls and bot raises with independently calculated payouts", () => {
+    const f = frame();
+    f.policyVersion = 1;
+    f.board = ["2c", "3d", "7h", "9s", "Jc"];
+    f.players[0].hole = ["As", "Ah"];
+    f.players.forEach((p) => {
+      p.contributed = 50;
+      p.streetBet = 0;
+      p.stack = 950;
+    });
+    f.players[1].style = "Tight";
+    f.currentBet = 0;
+    f.pending = [0, 1];
+    f.action = "raise";
+    f.amount = 50;
+    const evaluate = (cards: string[], seed = 1) =>
+      valueModel(f, new Map([[1, [{ cards, weight: 1 }]]]), seed);
+    const weak = evaluate(["Ks", "Kh"]);
+    // Legacy tight policy raises a pair 1.3%; otherwise checks, or folds
+    // when facing this price. River pot100: check -> raise45 -> call45.
+    expect(weak.find((v) => v.key === "check")!.chips).toBeCloseTo(
+      100 + 0.013 * 45,
+    );
+    // Bet50 -> opponent folds98.7%, or raises to118 then hero calls.
+    expect(weak.find((v) => v.key === "raise")!.chips).toBeCloseTo(
+      0.987 * 100 + 0.013 * 218,
+    );
+    expect(weak.find((v) => v.key === "raise")!.allFold).toBeCloseTo(98.7);
+    const strong = evaluate(["7s", "7d"]);
+    // Trips raise65%, otherwise call35%; hero loses every showdown.
+    expect(strong.find((v) => v.key === "check")!.chips).toBeCloseTo(
+      -0.65 * 45,
+    );
+    expect(strong.find((v) => v.key === "raise")!.chips).toBeCloseTo(
+      -0.35 * 50 - 0.65 * 118,
+    );
+    expect(strong.find((v) => v.key === "fold")!.chips).toBe(0);
+    expect(evaluate(["Ks", "Kh"], 999)).toEqual(weak);
+    for (const v of [...weak, ...strong]) {
+      expect(v.exact).toBe(true);
+      expect(v.samples).toBe(0);
+      expect(v.margin).toBe(0);
+    }
+    // With only50left, a bet is all-in: no opponent raise is legal.
+    f.players.forEach((p) => {
+      p.stack = 50;
+      p.contributed = 950;
+    });
+    expect(evaluate(["7s", "7d"]).find((v) => v.key === "raise")!.chips).toBe(
+      -50,
+    );
   });
 });

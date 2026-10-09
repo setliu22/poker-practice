@@ -342,8 +342,14 @@ export function handFeatures(hole: string[], board: string[]) {
   } else strength = 0.09 + (high / 14) * 0.12;
   const texture = boardFeatures(board),
     playsBoard = board.length === 5 && compare(h, best(board)) === 0;
-  if (playsBoard)
-    strength = h.category === 8 && h.kickers[0] === 14 ? 0.5 : 0.23;
+  // These shared board hands cannot lose to any legal two-card holding.
+  // An ace-high straight is protected only when no flush can be completed.
+  const lockedBoard =
+    playsBoard &&
+    ((h.category === 8 && h.kickers[0] === 14) ||
+      (h.category === 7 && h.kickers[1] === 14) ||
+      (h.category === 4 && h.kickers[0] === 14 && texture.suitCount < 3));
+  if (playsBoard) strength = lockedBoard ? 0.5 : 0.23;
   if (texture.fourFlush && h.category < 5) strength -= 0.15;
   if (texture.fourStraight && h.category < 4) strength -= 0.12;
   if (texture.paired && h.category === 5) strength -= 0.04;
@@ -356,7 +362,13 @@ export function handFeatures(hole: string[], board: string[]) {
       ({ s, n }) => n === 4 && hole.some((c) => c[1] === s),
     ),
     flushDraw = board.length < 5 && h.category < 5 && !!drawSuit;
-  const nutFlushDraw = flushDraw && hole.includes("A" + drawSuit!.s);
+  // The nut draw uses the highest suited rank that is not already on the board;
+  // for example K♥ is the nut-flush draw when A♥ is a community card.
+  const highestUnboardedSuitRank = drawSuit
+    ? [...ranks].reverse().find((rank) => !board.includes(rank + drawSuit.s))
+    : undefined;
+  const nutFlushDraw =
+    flushDraw && hole.includes(highestUnboardedSuitRank + drawSuit!.s);
   const straightMissing = new Set<number>();
   if (board.length < 5 && h.category < 4)
     for (const { w, present } of windows([...values, ...bv]))
@@ -391,7 +403,7 @@ export function handFeatures(hole: string[], board: string[]) {
     backdoor,
     monster: strength >= 0.8 && !playsBoard,
     playsBoard,
-    lockedBoard: playsBoard && h.category === 8 && h.kickers[0] === 14,
+    lockedBoard,
   };
 }
 export function contextualDistribution(

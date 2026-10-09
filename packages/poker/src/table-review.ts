@@ -63,26 +63,40 @@ function sampleHoles(
   ranges: Map<number, Combo[]>,
   rng: () => number,
 ) {
-  const holes = new Map<number, string[]>([[0, f.players[0].hole]]);
-  const used = new Set([...f.board, ...f.players[0].hole]);
-  for (const seat of shuffle([...ranges.keys()], rng)) {
-    const legal = ranges
-      .get(seat)!
-      .filter((c) => c.cards.every((x) => !used.has(x)));
-    const sum = legal.reduce((n, c) => n + c.weight, 0);
-    if (!sum) return null;
-    let roll = rng() * sum;
-    let selected = legal[legal.length - 1];
-    for (const c of legal) {
-      roll -= c.weight;
-      if (roll <= 0) {
-        selected = c;
+  // Independent range draws, rejecting the entire tuple on collision, sample
+  // the product of action likelihoods conditioned on a legal deal. Sequentially
+  // renormalizing later seats would bias this joint distribution.
+  let holes = new Map<number, string[]>();
+  let used = new Set<string>();
+  let accepted = false;
+  for (let attempt = 0; attempt < 2000; attempt++) {
+    holes = new Map([[0, f.players[0].hole]]);
+    used = new Set([...f.board, ...f.players[0].hole]);
+    let collision = false;
+    for (const [seat, combos] of ranges) {
+      const sum = combos.reduce((n, c) => n + c.weight, 0);
+      let roll = rng() * sum;
+      let selected = combos[combos.length - 1];
+      for (const c of combos) {
+        roll -= c.weight;
+        if (roll <= 0) {
+          selected = c;
+          break;
+        }
+      }
+      if (!selected || selected.cards.some((card) => used.has(card))) {
+        collision = true;
         break;
       }
+      holes.set(seat, selected.cards);
+      selected.cards.forEach((card) => used.add(card));
     }
-    holes.set(seat, selected.cards);
-    selected.cards.forEach((c) => used.add(c));
+    if (!collision) {
+      accepted = true;
+      break;
+    }
   }
+  if (!accepted) return null;
   // Folded cards are unknown in range analysis. Draw them without consulting the real deal.
   for (const p of f.players)
     if (!holes.has(p.seat)) {
@@ -181,7 +195,7 @@ export function probability(
       : `Estimate from ${count} simulated deals; small differences can be sampling noise.`,
   };
 }
-function valueModel(
+export function valueModel(
   f: DecisionFrame,
   ranges: Map<number, Combo[]>,
   seed: number,
@@ -245,6 +259,98 @@ function valueModel(
       amount,
     });
   }
+  if (f.board.length === 5 && ranges.size === 1) {
+    const [opponent, combos] = [...ranges][0];
+    // On the river there are no unknown future cards. Enumerate the bot's
+    // complete response tree instead of sampling policy actions or hole cards.
+    // The learner's specified continuation remains call every further raise.
+    const settle = (
+      s: TableState,
+      depth = 0,
+    ): { chips: number; allFold: number } => {
+      if (s.complete)
+        return {
+          chips: s.players[0].stack - f.players[0].stack,
+          allFold: s.players.every((p) => p.seat === 0 || p.folded) ? 100 : 0,
+        };
+      if (depth > 8)
+        throw new Error("River response tree exceeded its finite limit.");
+      if (s.actor === 0) {
+        const legal = legalActions(s)!;
+        act(s, 0, legal.toCall ? "call" : "check");
+        return settle(s, depth + 1);
+      }
+      let chips = 0,
+        allFold = 0;
+      for (const response of botDistribution(botObservation(s))) {
+        const branch = structuredClone(s);
+        act(branch, branch.actor!, response.action, response.amount);
+        const result = settle(branch, depth + 1);
+        chips += response.probability * result.chips;
+        allFold += response.probability * result.allFold;
+      }
+      return { chips, allFold };
+    };
+    const mass = combos.reduce((sum, c) => sum + c.weight, 0);
+    if (!(mass > 0))
+      throw new Error("An opponent range must have positive weight.");
+    return choices.map((choice) => {
+      if (choice.action === "fold")
+        return {
+          key: choice.key,
+          label: choice.label,
+          chips: 0,
+          allFold: 0,
+          exact: true,
+          margin: 0,
+          samples: 0,
+          outcomes: [] as number[],
+        };
+      let chips = 0,
+        allFold = 0;
+      for (const combo of combos) {
+        const s = structuredClone(probe);
+        s.runout = [...f.board];
+        s.players[opponent].hole = [...combo.cards];
+        s.players.forEach((p) => {
+          p.payout = 0;
+        });
+        act(s, 0, choice.action, choice.amount);
+        const result = settle(s);
+        chips += (combo.weight / mass) * result.chips;
+        allFold += (combo.weight / mass) * result.allFold;
+      }
+      return {
+        key: choice.key,
+        label: choice.label,
+        chips,
+        allFold,
+        exact: true,
+        margin: 0,
+        samples: 0,
+        outcomes: [] as number[],
+      };
+    });
+  }
+  const rng = random(seed);
+  // Fixed sample count: do not stop as soon as a favorable interval appears.
+  const worlds = Array.from({ length: 640 }, () => {
+    const holes = sampleHoles(f, ranges, rng);
+    if (!holes)
+      throw new Error("Unable to sample a legal joint opponent range.");
+    const used = [...f.board, ...[...holes.values()].flat()];
+    return {
+      holes,
+      runout: [
+        ...f.board,
+        ...shuffle(
+          deck.filter((c) => !used.includes(c)),
+          rng,
+        ).slice(0, 5 - f.board.length),
+      ],
+      responseSeed: Math.floor(rng() * 4294967295),
+    };
+  });
   return choices.map((choice) => {
     if (choice.action === "fold")
       return {
@@ -255,23 +361,16 @@ function valueModel(
         exact: true,
         samples: 0,
         allFold: 0,
+        outcomes: worlds.map(() => 0),
       };
-    const rng = random(seed);
     let sum = 0,
       squares = 0,
       allFold = 0,
       n = 0;
-    for (let i = 0; i < 240; i++) {
-      const holes = sampleHoles(f, ranges, rng);
-      if (!holes) continue;
-      const used = [...f.board, ...[...holes.values()].flat()];
-      const runout = [
-        ...f.board,
-        ...shuffle(
-          deck.filter((c) => !used.includes(c)),
-          rng,
-        ).slice(0, 5 - f.board.length),
-      ];
+    const outcomes: number[] = [];
+    for (const world of worlds) {
+      const rng = random(world.responseSeed);
+      const { holes, runout } = world;
       const s: TableState = {
         ...probe,
         actions: structuredClone(f.actions ?? []),
@@ -301,6 +400,7 @@ function valueModel(
       }
       if (!s.complete) throw new Error("Decision model did not finish.");
       const net = s.players[0].stack - f.players[0].stack;
+      outcomes.push(net);
       sum += net;
       squares += net * net;
       n++;
@@ -311,10 +411,13 @@ function valueModel(
       key: choice.key,
       label: choice.label,
       chips: mean,
-      margin: 1.96 * Math.sqrt(Math.max(0, squares / n - mean * mean) / n),
+      margin:
+        1.96 *
+        Math.sqrt(Math.max(0, squares - n * mean * mean) / (n * (n - 1))),
       exact: false,
       samples: n,
       allFold: (100 * allFold) / n,
+      outcomes,
     };
   });
 }
@@ -346,8 +449,47 @@ function review(state: TableState, f: DecisionFrame): DecisionReview {
     closing.samples = 0;
   }
 
-  const top = values.reduce((a, b) => (a.chips > b.chips ? a : b));
-  const clear = top.chips - chosen.chips > top.margin + chosen.margin;
+  const comparisons = values
+    .filter((v) => v.key !== chosen.key)
+    .map((v) => {
+      if (v.exact && chosen.exact) {
+        const difference = v.chips - chosen.chips;
+        return {
+          key: v.key,
+          difference,
+          margin: 0,
+          samples: 0,
+          clear: difference > 1e-8,
+        };
+      }
+      const differences = v.outcomes.map(
+        (x, i) =>
+          (v.exact ? v.chips : x) -
+          (chosen.exact ? chosen.chips : chosen.outcomes[i]),
+      );
+      const n = differences.length;
+      const mean = differences.reduce((a, b) => a + b, 0) / n;
+      const variance =
+        differences.reduce((a, x) => a + (x - mean) ** 2, 0) / (n - 1);
+      // At most two alternatives: 2.24 is a conservative normal critical value
+      // for two Bonferroni-adjusted, two-sided 95% intervals. Exact-vs-exact
+      // needs no sampling error. Model misspecification is deliberately separate.
+      const margin = 2.24 * Math.sqrt(variance / n);
+      const difference = v.chips - chosen.chips;
+      return {
+        key: v.key,
+        difference,
+        margin,
+        samples: n,
+        clear: difference > margin,
+      };
+    });
+  const better = comparisons
+    .filter((c) => c.clear)
+    .sort((a, b) => b.difference - a.difference)[0];
+  const top = better ? values.find((v) => v.key === better.key)! : chosen;
+  const clear = Boolean(better);
+  const allExact = values.every((v) => v.exact);
   const groups = (cards: string[]) =>
     f.board.length >= 3
       ? best([...cards, ...f.board]).name
@@ -399,18 +541,24 @@ function review(state: TableState, f: DecisionFrame): DecisionReview {
       };
     }),
     rangeProbability,
-    values,
+    values: values.map(({ outcomes: _outcomes, ...v }) => v),
+    comparisons,
+    analysisVersion: 3,
     chosenKey: f.action,
     verdict: clear
-      ? `${top.label} earned more in this model`
-      : "No clear evidence your action was worse in this model",
+      ? `${top.label} has a higher estimated return in this limited model`
+      : allExact
+        ? "Your action has the highest return among the tested choices in this model"
+        : "No clear evidence your action was worse in this model",
     explanation: clear
-      ? `Your action averaged ${chosen.chips.toFixed(1)} chips from this decision; ${top.label.toLowerCase()} averaged ${top.chips.toFixed(1)}. This comparison depends on the assumptions below.`
-      : `Your action averaged ${chosen.chips.toFixed(1)} chips from this decision. The simulation does not establish that another option is better after allowing for sampling uncertainty.`,
+      ? `Your action averaged ${chosen.chips.toFixed(1)} chips from this decision; ${top.label.toLowerCase()} averaged ${top.chips.toFixed(1)}. ${better!.samples === 0 ? `The difference is ${better!.difference.toFixed(1)} chips, exactly enumerated under the stated bot-response model.` : `The paired difference is ${better!.difference.toFixed(1)} ± ${better!.margin.toFixed(1)} chips (approximate 95% sampling interval, adjusted for comparing alternatives).`} This does not measure whether the bot assumptions are realistic.`
+      : allExact
+        ? `Your action returns ${chosen.chips.toFixed(1)} chips on average under this exactly enumerated river model${comparisons.some((c) => Math.abs(c.difference) < 1e-8) ? "; another tested choice ties it" : ""}. Exact arithmetic does not make the bot assumptions or the forced call-to-raises strategy correct.`
+        : `Your action averaged ${chosen.chips.toFixed(1)} chips from this decision. The simulation cannot reliably separate these choices. That is an inconclusive comparison, not evidence your action was good.`,
     model:
-      "One-round model: bots respond using their rules for the rest of this betting round; you call any further raises. Later streets are checked through. Net chips exclude money already in the pot. This is a teaching model, not an optimal-play recommendation.",
+      "Heads-up river actions enumerate every legal range combination and bot response exactly. Other situations use paired simulation. One-round model: bots respond using their rules for the rest of this betting round; you call any further raises. Later streets are checked through. Net chips exclude money already in the pot. Intervals describe random sampling error only, not incorrect bot assumptions or omitted future betting. On the flop and turn, forcing later streets to check can substantially misprice draws, bluffs and value bets. These are conditional model comparisons, not grades of poker skill or optimal-play recommendations.",
     rangeNote:
-      "Ranges start with equally likely legal hands, then weight each hand by how often this bot would have taken its earlier actions. Only information available at your decision is used. Multiway sampling draws ranges in random order and removes collisions; it approximates the joint range. Folded cards are unknown.",
+      "Ranges start with equally likely legal hands, then weight each hand by how often this bot would have taken its earlier actions. Only information available at your decision is used. Multiway samples draw independent ranges and reject colliding deals; this conditions the action-weighted joint range on legal cards. Folded cards are unknown.",
   };
 }
 // Older saved hands can be reconstructed from their own recorded actions, without guessing.
@@ -467,6 +615,10 @@ export function analyzeTable(s: TableState) {
   s.rounds ??= [];
   for (const f of s.decisions ?? []) {
     let r = s.rounds.find((r) => r.id === f.id);
+    if (r && r.analysisVersion !== 3) {
+      s.rounds = s.rounds.filter((entry) => entry.id !== f.id);
+      r = undefined;
+    }
     if (!r) {
       r = review(s, f);
       s.rounds.push(r);

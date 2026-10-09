@@ -15,5 +15,8 @@ export function openDatabase(
   db.exec(
     readFileSync(resolve("apps/api/migrations/003_bot_games.sql"), "utf8"),
   );
+  db.exec(
+    readFileSync(resolve("apps/api/migrations/004_game_numbers.sql"), "utf8"),
+  );
   return db;
 }
