@@ -82,7 +82,14 @@ test("lesson teaches reasoning, changes assumptions, saves progress and fits mob
     page.getByText("Decisions correct: 8/8 · Reasons correct: 7/8"),
   ).toBeVisible();
   await page.reload();
+  await page
+    .getByText("More practice and earlier lessons", { exact: true })
+    .click();
+  await page.getByRole("button", { name: "Open earlier exercises" }).click();
   await expect(
     page.getByRole("heading", { name: "Saved learning progress" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Decisions: 8/8 · Reasons: 7/8", { exact: true }),
   ).toBeVisible();
 });

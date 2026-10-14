@@ -46,7 +46,9 @@ test("walks through public action, position contrast, raised-pot rules and fresh
   await expect(
     page.getByRole("region", { name: "Walkthrough feedback" }),
   ).toContainText("not inventing a strategy recommendation");
-  await page.getByRole("button", { name: "Try a fresh preflop hand" }).click();
+  await page
+    .getByRole("button", { name: "Try a fresh preflop hand", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Try a fresh preflop hand" }),
   ).toBeVisible();
