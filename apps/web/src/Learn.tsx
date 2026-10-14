@@ -2,6 +2,7 @@ import { PreflopWalkthrough } from "./PreflopWalkthrough";
 import { ReadLesson, ReadProgressSummary } from "./ReadLesson";
 import { useEffect, useRef, useState } from "react";
 import { Cards } from "./Cards";
+import { CashPractice } from "./CashPractice";
 import type {
   LearningQuestion,
   LearningFeedback,
@@ -478,6 +479,26 @@ export function LearningProgressSummary({ refresh }: { refresh: unknown }) {
 
 export function Learn() {
   const [earlier, setEarlier] = useState(false);
+  const [cash, setCash] = useState(() => {
+    try {
+      return localStorage.getItem("poker-practice-learning-view") === "cash";
+    } catch {
+      return false;
+    }
+  });
+  if (cash)
+    return (
+      <CashPractice
+        onBack={() => {
+          try {
+            localStorage.removeItem("poker-practice-learning-view");
+          } catch {
+            /* Browser storage is optional. */
+          }
+          setCash(false);
+        }}
+      />
+    );
   if (earlier)
     return (
       <>
@@ -487,5 +508,31 @@ export function Learn() {
         <EarlierLearn />
       </>
     );
-  return <PreflopWalkthrough onLibrary={() => setEarlier(true)} />;
+  return (
+    <>
+      <section className="panel cash-entry">
+        <span className="eyebrow">Online cash · 2–9 seats</span>
+        <h2>Online cash Decision Lab</h2>
+        <p>
+          Make a river decision before seeing feedback. Practice calls, value
+          bets, bluffs and multiway pots, then revisit your reasoning with a
+          fresh hand.
+        </p>
+        <button
+          className="primary"
+          onClick={() => {
+            try {
+              localStorage.setItem("poker-practice-learning-view", "cash");
+            } catch {
+              /* Browser storage is optional. */
+            }
+            setCash(true);
+          }}
+        >
+          Open online cash Decision Lab
+        </button>
+      </section>
+      <PreflopWalkthrough onLibrary={() => setEarlier(true)} />
+    </>
+  );
 }

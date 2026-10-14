@@ -34,5 +34,8 @@ export function openDatabase(
       "utf8",
     ),
   );
+  db.exec(
+    readFileSync(resolve("apps/api/migrations/009_cash_practice.sql"), "utf8"),
+  );
   return db;
 }

@@ -1,4 +1,5 @@
 import { Learn, LearningProgressSummary } from "./Learn";
+import { CashProgressSummary } from "./CashPractice";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -713,6 +714,7 @@ function Progress() {
         <p role="status">Loading progress…</p>
       ) : (
         <>
+          <CashProgressSummary refresh={data} />
           <LearningProgressSummary refresh={data} />
           <section className="progress-summary">
             <div>

@@ -3388,3 +3388,162 @@ main:has(.bot-page-heading) {
   .walkthrough-progress { gap:4px; } .walkthrough-progress button { min-width:34px; padding:6px 9px; }
 }
 .learning-seat.acting-seat { border:2px solid #8bd6ec; background:#1e454b; opacity:1; }
+
+.cash-entry {
+  margin-bottom: 1.5rem;
+}
+.cash-practice {
+  max-width: 1040px;
+}
+.cash-practice .panel,
+.cash-progress {
+  overflow-wrap: anywhere;
+}
+.cash-settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.cash-settings-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  flex: 1 1 200px;
+}
+.cash-settings-row select {
+  width: 100%;
+  min-width: 0;
+}
+.cash-context {
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.cash-seats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.6rem;
+  margin: 1.4rem 0;
+}
+.cash-seat {
+  display: flex;
+  flex-direction: column;
+  padding: 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #111d2c;
+  font-size: 0.86rem;
+}
+.cash-seat.cash-hero {
+  border-color: #e4c974;
+  background: #252d29;
+}
+.cash-seat.cash-folded {
+  color: var(--muted);
+}
+.cash-history {
+  padding-left: 1.3rem;
+}
+.cash-history li {
+  margin: 0.35rem 0;
+}
+.cash-ranges {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.cash-ranges section {
+  min-width: 0;
+}
+.cash-range-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+.cash-range-row .cards {
+  flex-shrink: 0;
+}
+.cash-practice details {
+  margin: 1rem 0;
+}
+.cash-practice summary,
+.cash-progress summary {
+  cursor: pointer;
+}
+.cash-change,
+.cash-cue {
+  border-left: 3px solid var(--accent);
+  padding: 0.8rem 1rem;
+  background: var(--soft);
+  margin: 1rem 0;
+}
+.cash-cue p {
+  margin: 0.3rem 0 0;
+}
+.cash-estimate {
+  display: block;
+}
+.cash-feedback {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.cash-calculation {
+  font-variant-numeric: tabular-nums;
+}
+.cash-skill-list {
+  list-style: none;
+  padding: 0;
+}
+.cash-skill-list li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.cash-skill-list p {
+  margin: 0;
+}
+@media (max-width: 520px) {
+  .cash-practice .panel,
+  .cash-entry {
+    padding: 1rem;
+  }
+  .cash-seats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.4rem;
+  }
+  .cash-seat {
+    padding: 0.5rem;
+    font-size: 0.75rem;
+  }
+  .cash-ranges {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cash-practice .learning-cards {
+    gap: 0.7rem;
+  }
+  .cash-practice .cards {
+    gap: 0.3rem;
+    flex-wrap: wrap;
+  }
+  .cash-practice .card {
+    width: 40px;
+    height: 58px;
+    padding: 4px;
+  }
+  .cash-practice .cards.small .card {
+    width: 31px;
+    height: 44px;
+  }
+  .cash-practice .button-row button {
+    width: 100%;
+  }
+}

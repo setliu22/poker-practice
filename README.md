@@ -1,6 +1,6 @@
 # Poker Practice
 
-A complete local learning app for heads-up, no-limit Texas Hold’em. Five exercise modes, a playable bot table, deterministic feedback, 12 original decision scenarios, and SQLite progress tracking. No login, API key, solver, paid service, or external connection is used during practice.
+A local learning app for no-limit Texas Hold’em, with 2–9-player tables, online cash decision practice, a playable bot table, deterministic feedback, and SQLite progress tracking. No login, API key, solver, paid service, or external connection is used during practice.
 
 **For coding agents:** read [START_HERE.md](START_HERE.md) for the portable head-chef workflow, current plan/handoff, and verification instructions. The [system design](docs/agent-workflow.md) explains bounded delegation and independent review.
 
@@ -29,6 +29,12 @@ Open **http://127.0.0.1:3001**. Run from the repository root so migrations and b
 
 ## Practice
 
+Open **Learn → Online cash Decision Lab** for focused river decisions at **2–9-seat tables**, starting at nine seats. Table size and players still in the hand are displayed separately. Practice bluff catching, value betting, bluffing, and closing three-player calls using public betting histories, 100-BB starting stacks, and explicitly supplied weighted ranges. Multiway practice requires at least three seats.
+
+Choose an action, explain your reasoning, estimate a percentage, and record your confidence before seeing feedback. A hint is optional and marks the answer as assisted. Each first answer is saved once; a guided follow-up changes the price, range, or responses so you can test what changes your decision. **Fresh review** creates another situation instead of scoring the same revealed question again. Progress separates independent answers, assisted answers, and guided follow-ups, identifies action/reasoning/estimation mistakes, and suggests a cue for your next session.
+
+These are exact calculations **under the supplied study assumptions**, not solved human ranges or site-specific strategy. River calls close the action; bet/check exercises stipulate responses. The fixed study rake is disclosed and does not represent any site's actual fees. Earlier-street equity does not automatically settle a decision with later betting. See [the lab's design and calculation limits](docs/online-cash-practice.md).
+
 - **Who wins?** Choose **Random deals** for natural deals from the full deck, or **Balanced hands** to practice all nine winning hand categories at approximately equal frequencies. Balanced deals use randomized ranks, suits, extra cards and board/hole-card allocation, with evaluator checks that the winning category matches the selected category. Quads and straight flushes therefore appear much more often than in natural deals. Both styles are fresh, seeded and reproducible. The chosen category and answer stay hidden until submission. Feedback marks the stronger hand, names both hands, displays each best five in rank order, and outlines the deciding rank or kicker for matching categories. Ties are explicitly marked.
 - **What beats me?** Classify four legal specific combinations. After answering, optionally reveal stronger categories derived by enumerating every legal opponent hand. Possible does not mean likely; uniform random cards are not a post-bet range.
 - **Pot odds.** Enter required equity. The final pot includes the original pot, opponent’s bet, and call. Answers within 0.5 percentage points are accepted.
@@ -39,7 +45,7 @@ Progress separates categorical accuracy from numeric estimation error. Decision 
 
 **Practice my weak areas:** rank skills by mistake rate in the last 100 attempts, breaking ties by number of mistakes. Categorical unsupported answers and pot-odds answers outside tolerance count as mistakes; equity estimates more than 5 percentage points away count as misses for selection only. Target the highest-ranked skill and its mode on three out of four seed values; the fourth keeps ordinary seeded practice in the selected mode. With no recorded weakness, select ordinary practice. The chosen rule appears on each exercise. With Random deals selected, showdown deals remain unfiltered even during weak-area practice. Balanced hands overrides weak-area switching for an explicitly selected Who wins mode so its balanced distribution is preserved. Other fixture sets have limited variety.
 
-Export all attempts as versioned JSON from Progress. Clearing requires a native confirmation dialog and deletes attempts and stored exercises. Export is for backup/analysis; importing is not implemented.
+Export attempts and cash-practice history as versioned JSON from Progress. Cash drill exports include earned questions and feedback; private generation seeds and locked follow-ups stay hidden. Clearing requires confirmation and deletes attempts and stored exercises, including cash drills and hints. Export is for backup/analysis; importing is not implemented.
 
 ## Bot table
 

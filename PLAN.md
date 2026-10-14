@@ -1,33 +1,38 @@
 # Active plan
 
-Status: **Complete**. Owner: lead agent. Started 2026-10-13; completed 2026-10-14 UTC.
+Status: In progress — Linux browser verification and publication. Owner: lead agent. Started 2026-10-14 UTC.
 
-## Objective and acceptance
+## Objective
 
-Establish the portable head-chef coding workflow, use it to deliver and independently review this change, preserve the existing Poker Practice work, verify the application, and publish the public GitHub repository.
+Improve Poker Practice to build skills that transfer to online no-limit Hold’em cash games. User specified online cash and corrected the six-player assumption: include full-ring contexts (including 8/9-player tables) with selectable table size, actual positions and active-player counts. Do not hardcode six-max. Baseline: clean `main` at `2791d73`; work branch `feat/online-cash-training`. The previous workflow/publication task is complete.
 
-Acceptance is met: any coding LLM can start from `START_HERE.md`; the plan, progress, verification and design files define ownership, bounded tasks, dependencies, fresh worker context, independent review/testing and honest fallback. Existing app work and workflow were checkpointed separately. Source, licensed chart assets and original history are published; local learner data, dependencies, builds and the optional external solver are excluded. GitHub CI passed all required checks on `cda70ae`; the final completion record changes only Markdown.
+Deliver an integrated river Decision Lab with independent decision practice, range/price reasoning, useful feedback and persistent mistake review. Keep honest limits on authored strategy and bot models; do not claim measured real-world improvement without evidence.
 
-## Completed task queue
+## Acceptance
 
-| ID  | Task and owner                                     | Owned writes                                                                  | Acceptance evidence                                                                                           | Status |
-| --- | -------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------ |
-| W0  | Publication assets / lead                          | `.gitignore`                                                                  | Root `/data/` ignored; required chart JSON/license/provenance included in `6546c94`                           | Done   |
-| W1  | Portable workflow / workflow_builder               | Six workflow Markdown files and README links/history clarification            | Linked entrypoint, realistic contracts, formatting and link checks                                            | Done   |
-| W2  | Independent design review / workflow_reviewer      | None                                                                          | No blocking/material findings                                                                                 | Done   |
-| W3  | Functional/source checks / functional_verifier     | Ignored test artifacts only                                                   | Imports/lockfile/links valid; remote source/history audited; actual Linux browser evidence now available      | Done   |
-| W4  | Integration/checkpoints / lead                     | Git index/commits, plan/handoff                                               | Preserved existing work; application `6546c94`, workflow `431c115`; staged contents reviewed                  | Done   |
-| W5  | Public GitHub publication / lead                   | Remote/branch and authorized GitHub writes                                    | Original history preserved; remote source tree matched local; account authorization repaired                  | Done   |
-| W6  | Automated verification / lead                      | `.github/workflows/verify.yml`                                                | Node 24 Linux unit/build/full desktop-mobile CI green, run `38505645001`                                      | Done   |
-| B1  | Browser navigation repair / browser_fix_builder    | `tests/browser/learning.spec.ts`, `tests/browser/preflop-walkthrough.spec.ts` | Reopen earlier lessons after reload; assert saved scores; exact action locator; assertions retained           | Done   |
-| B2  | Browser repair review/recheck / reviewer and lead  | Reviewer read-only; lead plan/handoff                                         | Independent review accepted; all 108 browser cases passed                                                     | Done   |
-| C1  | Bound exhaustive-test timing / browser_fix_builder | `tests/table-review.test.ts`, `tests/decision-generator.test.ts`              | Finite 30s/60s budgets on two correctness cases; all seeds/samples/assertions retained; targeted 20/20 passed | Done   |
-| C2  | Hosted CI scheduling / lead and reviewer           | CI, `VERIFY.md`, plan/handoff                                                 | One unit-test worker; API responsiveness checks unchanged; independent review and full CI passed              | Done   |
+- New practice uses recognizable online cash situations with positions, effective stacks, public action and legal cards/sizes.
+- Learner commits an answer before feedback; explanations distinguish arithmetic and stated assumptions from general optimal strategy.
+- Practice records meaningful first-attempt learning evidence and supports revisiting weaknesses with fresh variations, without treating profit or bot-model agreement as skill.
+- Existing saved data, practice modes, bots, keyboard/mobile accessibility, public-information isolation and local/offline use continue to work.
+- Independent code review and functional verification pass. Relevant unit/API/browser tests and production build have current evidence; use GitHub branch CI if local Chromium remains unavailable.
+- Lead updates this plan and `PROGRESS.md` at milestones; preserve all prior work.
 
-## Final state and next task
+## Implementation contracts
 
-Public repository: [setliu22/poker-practice](https://github.com/setliu22/poker-practice). The user explicitly authorized public publication. Local `main` tracks `origin/main`; use Git metadata for the exact latest documentation commit. Tested code commit: `cda70aecf8973acfa7af69b0f92d06b836b137d5`.
+Add an online-cash river Decision Lab with four skills: bluff catching, value betting, bluffing, and closing multiway calls. Select 2–9 seats, default nine; exclude multiway for two seats. Supplied weighted ranges and response assumptions make arithmetic exact and conditional. First answers include action, reasoning, percentage estimate and confidence. Hints are tracked before submission; immutable first answers, assisted work, and guided changed-assumption follow-ups remain separate. Fresh review uses new specifications and excludes recent fingerprints. Preserve old learning variants and saved data.
 
-GitHub connection write access now works. The local checkpoint `a435543` is preserved on `local-checkpoints/a435543`; connector-created commits carry the same reviewed source content. The original application history remains in the published branch. Local Chromium's macOS launch limitation is covered by passing Linux browser CI; optional real-engine tests were verified separately locally.
+Lead owns `packages/shared/src/cash-practice.ts`. Engine exports `generateCashDrill(seed, players, skill)`, `gradeCashQuestion(question, answer, assisted = false)`, `cashHint(question)`, `cashSkillLabels`, `cashSkillCues`. Backend owns adaptive selection and aggregation. API prefix `/api/cash-practice`: POST `/drills`, GET `/drills/:id`, POST `/drills/:id/hint` -> `{hint}`, POST `/drills/:id/answer` -> drill view, GET `/progress?players=9`. Transfer hidden until initial answer. New private specifications version 1. Export/clear include new persisted data.
 
-No implementation or publication task remains after this completion record is published. For the next substantive user request, inspect actual Git state and replace this completed plan with that objective, scoped ownership and acceptance criteria. Keep durable rules in `AGENTS.md` and design in `docs/agent-workflow.md`.
+## Task queue
+
+| ID    | Task / owner                                       | Write ownership                                                                                               | Dependencies                | Acceptance                                                                                                                                                   | Status                  |
+| ----- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- |
+| D1–D3 | Discovery / auditor and lead                       | Shared contract, plan/handoff                                                                                 | Baseline                    | Audit learning, verify primary sources, settle additive contract                                                                                             | Complete                |
+| B1    | Conditional river engine / engine builder          | `packages/poker/src/cash-practice.ts`, `tests/cash-practice.test.ts`, `docs/online-cash-practice.md`          | Shared contract             | Weighted legal joint worlds, split pots, rake, legal public history/stacks/positions; deterministic varied generation and independent arithmetic fixtures    | Complete                |
+| B2    | Persistence and API / API builder                  | `apps/api/src/cash-practice.ts`, migration 009, `database.ts`, `app.ts`, `tests/cash-practice-api.test.ts`    | Shared and engine interface | Immutable idempotent answers, staged privacy, durable hints/progress, fresh adaptive review, export/clear integration                                        | Complete                |
+| B3    | Learner flow / UI builder                          | `apps/web/src/CashPractice.tsx`, `Learn.tsx`, `main.tsx`, `styles.css`, `tests/browser/cash-practice.spec.ts` | Shared/API contracts        | Prominent entry; 2–9 seats; reasoning before feedback; changed-assumption practice, fresh review, useful progress; responsive keyboard/error/reload behavior | Complete                |
+| R1    | Independent code review / fresh reviewer           | None                                                                                                          | Integrated B1–B3            | Privacy, math, persistence, teaching and UI findings resolved                                                                                                | Complete                |
+| V1    | Independent functional verification / fresh tester | None                                                                                                          | Integrated B1–B3            | Relevant and full tests/build, browser evidence or recorded environment limitation with Linux CI                                                             | Core passed; CI pending |
+| I1    | Integrate and hand off / lead                      | Root docs, shared contract, integration                                                                       | R1/V1                       | Complete checks, inspect diff, commit and user-authorized GitHub publication; accurate current handoff                                                       | In progress             |
+
+Builders have disjoint ownership. Shared-contract changes go through the lead; reviewers/testers remain independent. No generated opening charts for eight seats, solver dependency, win-rate claims, or retroactive grading of revealed hands.

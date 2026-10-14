@@ -1,5 +1,6 @@
 import { readLessonRoutes } from "./read-lesson";
 import { learningRoutes } from "./learning";
+import { cashPracticeRoutes, cashDrillExport } from "./cash-practice";
 import express from "express";
 import { solverCharts } from "./solver-charts";
 import { assistantSchema } from "../../../packages/shared/src/assistant";
@@ -50,6 +51,7 @@ export function createApp(db: Database.Database) {
   app.use(express.json({ limit: "32kb" }));
   app.use("/api/learning", learningRoutes(db));
   app.use("/api/learning/read", readLessonRoutes(db));
+  app.use("/api/cash-practice", cashPracticeRoutes(db));
   // Preserve the latest available completed hand for tables created before game tracking.
   for (const row of db.prepare("SELECT state FROM bot_tables").all() as {
     state: string;
@@ -622,6 +624,9 @@ export function createApp(db: Database.Database) {
       attempts: attempts(),
       readLessons: db.prepare("SELECT * FROM read_lessons").all(),
       readLessonAttempts: db.prepare("SELECT * FROM read_lesson_answers").all(),
+      cashDrills: cashDrillExport(db),
+      cashAnswers: db.prepare("SELECT * FROM cash_answers").all(),
+      cashHints: db.prepare("SELECT * FROM cash_hints").all(),
       learningAttempts: db
         .prepare("SELECT * FROM learning_questions WHERE feedback IS NOT NULL")
         .all(),
@@ -633,6 +638,7 @@ export function createApp(db: Database.Database) {
       db.prepare("DELETE FROM exercises").run();
       db.prepare("DELETE FROM learning_questions").run();
       db.prepare("DELETE FROM read_lessons").run();
+      db.prepare("DELETE FROM cash_drills").run();
     })();
     res.json({ cleared: true });
   });

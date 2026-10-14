@@ -80,6 +80,7 @@ CI runs unit/integration files with `npm test -- --maxWorkers=1` to keep exhaust
 Use `npm run dev`, or `npm run build` then `npm start` for built assets. Use dedicated temporary test data for destructive flows.
 
 - Learn/exercise feedback: submit, reveal feedback only afterward, check keyboard operation and saved progress.
+- Online cash Decision Lab: default nine seats; select eight/two; distinguish table seats from active opponents and exclude two-seat multiway practice. Check public history pot/stack accounting, supplied-range/rake assumptions, action/reason/estimate/confidence submission, tracked hints, immutable first answers, staged guided follow-ups, fresh review, reload, error retry, export and clear. Independent, assisted and guided counts must stay separate.
 - Bot table: start a supported table, make legal actions, hide private cards until completion, finish/resume/replay without losing the original game's data.
 - Study tools: inspect odds/assistant/chart, then act or switch hands; results are public-only and stale results clear. Loading/error/retry and Escape/focus return work.
 - Narrow screens: controls/cards/dialogs remain usable without horizontal overflow; bot-model assumptions and unsupported solver contexts remain explicit.
