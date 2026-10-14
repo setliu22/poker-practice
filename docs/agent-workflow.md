@@ -45,6 +45,12 @@ The Git working tree and actual files are authoritative for state. The latest us
 
 When agent tools are unavailable, one agent performs these roles sequentially and records **self-review**, with executable/observable evidence. When only a few workers are available, schedule phases within that limit rather than running an imaginary larger team. Small prose edits need proportionate checks and may use this fallback without team overhead.
 
+## Worker lifecycle
+
+Create a worker only when its ticket has a concrete role, ready inputs and explicit scope. Do not pre-create an idle roster for hypothetical work. Record each worker's result and evidence, then return its file ownership to the lead. Retire a completed worker unless a specific follow-up is already assigned. Stop a worker whose task has been canceled or superseded.
+
+Before handoff, inspect the live roster and close/delete unused workers when the environment offers those operations. If only interruption is available, stop unnecessary running work and explain that historical agent entries cannot be deleted through the current tools. A finished task or absent live entry is evidence of completion, not evidence that an agent's history was deleted. Preserve useful findings in `PROGRESS.md` rather than depending on idle workers to hold project memory.
+
 ## Phases
 
 1. **Discover and plan.** Read the bootstrap/handoff, inspect status/diffs and relevant contracts, separate existing work from new scope, and put measurable acceptance in the plan. Identify uncertainty before implementation.

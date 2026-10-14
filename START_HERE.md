@@ -20,6 +20,7 @@ You are working on Poker Practice, a local TypeScript learning app. Use one lead
 - Reviewers inspect the final diff independently. Testers exercise actual behavior and report commands/results and gaps. Resolve findings and recheck affected behavior before calling the task done.
 - If delegation is unavailable, perform the phases sequentially and label review **self-review**. Never invent workers, independent review, test passes, or tool permissions.
 - For a small, reversible edit, use a short plan and proportionate checks. Do not create a large team or redundant tests for a typo.
+- Every spawned worker needs an assigned ticket, role and file scope. Capture its result, release its ownership, and retire it when the task is complete; do not keep unused or unassigned workers. Check the live roster before handoff. Use close/delete tools when available; otherwise stop unnecessary running work and report that deleting displayed agent entries is unavailable.
 
 ## Finish or hand off
 

@@ -25,6 +25,8 @@ Read [START_HERE.md](START_HERE.md) before substantive work, then the current [P
 
 Inspect and preserve existing changes; never reset, clean, or overwrite unrelated work. Use bounded task tickets and exclusive file ownership. The lead alone updates the active plan/handoff and integrates; delegation to a documentation builder is allowed when ownership is explicitly transferred for that phase.
 
+Spawn workers only for assigned tickets with an explicit role and scope. Retire them after recording their result and returning file ownership; do not keep unused or unassigned agents. Check the live roster before handoff. Close/delete completed workers when tools support it, stop unnecessary running work otherwise, and report deletion limitations honestly.
+
 Use the scripts in `package.json` and commands in `VERIFY.md`. There is no `npm run lint` script; `npm run build` includes TypeScript checking. Historical README test counts are not evidence for the current tree. Do not run the broad write-format script merely to check a small change.
 
 Commit or publish only within the user's authorized scope. Do not include `data/`, `dist/`, `node_modules/`, test artifacts, credentials, or the externally installed solver in publication. A request to upload the repo means its source/history and reproducible setup, not local learner data.

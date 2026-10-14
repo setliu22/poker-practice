@@ -1,35 +1,30 @@
 # Current handoff
 
-Updated: 2026-10-14 UTC. Owner: lead. Objective: improve online no-limit Hold’em cash practice, including full-ring tables. Implementation and independent review are complete; Linux browser CI and publication verification remain.
+Updated: 2026-10-14 UTC. Owner: lead. Objective complete: online no-limit Hold’em cash Decision Lab with full-ring support, durable learning review, independent verification and GitHub delivery.
 
-## Actual state
+## Delivered state
 
-- Branch `feat/online-cash-training`, based on `2791d73882af006ceb92d0425407f7cea53d270b`. Feature source/tests/docs are ready for a checkpoint commit.
-- Public GitHub: https://github.com/setliu22/poker-practice. Main confirmed at `2791d73` before this feature. Connector write access works; native CLI credentials/DNS are unavailable in this session. Use authenticated GitHub Git-data tools, preserve local checkpoints, compare trees before tracking a connector-created commit.
-- Node: `~/.local/share/poker-practice/node-v24.21.0-darwin-arm64/bin`; dependencies installed. Chromium launch remains blocked by macOS Mach-port error 141/SIGTRAP before app execution. Linux CI is required for browser evidence.
-- Previous workflow/publication task completed. Bot saved data, legacy exercises/replays, imported MIT preflop data, and optional external GTOpen preserved. No runtime dependencies added; solver code unchanged.
+- Public repo: https://github.com/setliu22/poker-practice. Reviewed application commit: `bc8661f5f5833c94bcc0a13dbb3a5eb3b0a8f9d6`, tree `867929d17efd81e14c38e66cce75f35005f1399a`. Feature branch `feat/online-cash-training`; final documentation handoff is integrated into `main`. Read `git status` / `git log -1` for the exact final docs commit rather than treating this file as proof of the current tree.
+- Local checkpoint `local-checkpoints/ef0eaa8` preserves the equivalent CLI commit. GitHub Git-data commits have different metadata but their trees were compared exactly. Earlier checkpoints/history preserved. No runtime dependencies, learner data, build/test artifacts or external solver files uploaded.
+- **Learn → Open online cash Decision Lab**: select 2–9 seats, default nine. Distinguishes table seats from active players. Four river skills: bluff catching, value betting, pure bluffing, closing multiway calls (three or more seats).
+- Answer action, rationale, estimate and confidence before feedback. Immutable saved first answers; tracked hints, guided follow-ups and independent answers count separately. Follow-ups change range weights and can retain or change the preferred action. Fresh review excludes recent semantic fingerprints; weakness/confidence summaries and next-session cues guide study.
+- Exact arithmetic under supplied weighted study ranges/responses: joint card-collision conditioning, split-pot shares, disclosed fixed rake, legal public histories and 100-BB stack accounting. These assumptions are not calibrated human ranges or proof of real-world mastery. See [design, sources and limits](docs/online-cash-practice.md).
+- Additive migration 009, versioned private snapshots, durable resume, export and clear. Exports omit seeds and locked follow-ups. Existing lessons, games/replays, privacy, MIT preflop assets and optional external GTOpen preserved.
 
-## Delivered implementation
+## Verification evidence
 
-- Learn prominently links to **Online cash Decision Lab**. Select 2–9 seats, default nine; table seats and active players separate. Four river skills: bluff catching, value betting, pure bluffing and closing multiway calls (three or more seats).
-- Exact weighted conditional EV, joint card-collision conditioning, split-pot shares, disclosed fixed study rake, legal public histories and 100-BB stack accounting. Authored study ranges/responses are assumptions, not human-calibrated strategy. See [design, sources and limits](docs/online-cash-practice.md).
-- Submit action, actual rationale, estimate and confidence before feedback. Immutable first answers; hints before answering mark assistance. Guided changed-range follow-ups unlock afterward and count separately. Some follow-ups retain the preferred action, preventing always-opposite guessing. Reason choices are seed-shuffled.
-- Fresh same-skill review excludes recent semantic fingerprints. Persistent independent action/reason/math weaknesses, high-confidence misses and next-session cues guide study. Assisted and guided attempts do not drive independent-mistake prioritization.
-- Additive migration 009 and version-1 private specifications; resume/reload, validation/idempotency, export and clear integrated. Exports expose staged public drill views, never private seeds or locked follow-ups.
-- Builders returned ownership; independent reviewer found no actionable defects. Functional tester found no defects in tested API/math/persistence behavior. UI inspection is separate from pending browser execution.
+[GitHub run 38510972941](https://github.com/setliu22/poker-practice/actions/runs/38510972941), on application commit `bc8661f`, completed successfully:
 
-## Current verification
+- **315 unit/integration tests passed**, two optional real-solver tests skipped; 33 files passed, one skipped.
+- **Production build passed**, including TypeScript checks.
+- **All 118 desktop/mobile browser cases passed**, including 10 new cash flows for privacy, first-answer requirements, hints/guided separation, reload/fresh review, 9/8/2 seats, settings isolation, retry and clear recovery. Mobile tests check 320-pixel bounds.
+- Independent code review found no actionable defects. Independent functional tester passed full local tests/build, final scoped engine/API **22/22**, and temporary actual-API smoke for **all 31 valid seat/skill combinations**, 62 immutable answers, assistance counts, staged privacy, DB reopen, export and clear. User data untouched.
+- Local Chromium cannot launch (Mach-port error 141/SIGTRAP); Linux CI provides actual browser evidence. Optional solver execution not repeated for this feature because solver code is unchanged.
+- Final handoff and worker-lifecycle changes are documentation only, self-reviewed with formatting/link inspection and `git diff --check`. They do not change the application tested above.
+- Local logs: `/tmp/cash-functional-vitest.log`, `/tmp/cash-functional-final-cash.log`, `/tmp/cash-functional-final-build.log`, `/tmp/cash-functional-playwright-collection.log`, `/tmp/cash-functional-final-api-smoke.log`.
 
-Tested dirty feature over `2791d73`; final engine adjustment covered by scoped rerun. Commands use Node PATH above.
+## Agent lifecycle and next session
 
-- `npm test -- --maxWorkers=1`: **315 passed, 2 optional solver tests skipped**, 33 files passed / one skipped, 56.57s.
-- `npx vitest run tests/cash-practice.test.ts tests/cash-practice-api.test.ts --maxWorkers=1`: **22/22 passed** after engine freeze, 4.02s. Independent golden weighted/raked payouts, joint collisions/ties, test-only evaluator cross-check, histories/stacks, deterministic variety and persistent assistance/privacy covered.
-- `npm run build`: **passed**, repeated after final engine change. Subsequent CSS changes were formatting only and preserved existing rules.
-- Independent actual API smoke after freeze: **all 31 valid seat/skill combinations**, 62 immutable answers, 15 hinted / 16 independent initial attempts, staged privacy, database reopen, export and clear **passed** with temporary data. User data untouched.
-- Playwright `--list`: **118 cases collected in 15 files**, including 10 new desktop/mobile cash flows. Local browser attempt failed five desktop cases at Chromium launch; **zero application/browser cases executed**. Linux CI pending.
-- Independent code review and `git diff --check`: **passed**; local documentation links resolve. Optional external solver execution not repeated because solver code is unchanged.
-- Logs: `/tmp/cash-functional-vitest.log`, `/tmp/cash-functional-final-cash.log`, `/tmp/cash-functional-final-build.log`, `/tmp/cash-functional-playwright-collection.log`, `/tmp/cash-functional-final-api-smoke.log`.
+The user requested removing unused agents. All builders/reviewer/tester finished and returned ownership; the live roster contains only the lead. No unassigned workers are running. `START_HERE.md`, `AGENTS.md` and the workflow now require assigned tickets/roles and retirement after results are captured. Current collaboration tools expose interruption but no deletion of historical entries; do not claim those entries were deleted.
 
-## Next action
-
-Inspect staged contents, commit the reviewed feature, publish `feat/online-cash-training` through the GitHub connector, verify its tree/head, and inspect Linux full-suite CI. Resolve actual CI findings and recheck affected behavior. Record final remote commit/run and clean working-tree state here; browser collection/static inspection is not browser success.
+No required feature work remains. Start a new objective from `START_HERE.md` and inspect actual state. Node is installed at `~/.local/share/poker-practice/node-v24.21.0-darwin-arm64/bin`. Use GitHub connector writes if the CLI cannot access credentials; public fetch can use scoped `http.curloptResolve=github.com:443:140.82.114.3` in this session. Preserve clean checkpoints and compare trees before synchronizing connector commits. Ordinary practice needs only local servers and no solver or account.
