@@ -1,29 +1,29 @@
 # Current handoff
 
-Updated: 2026-10-14 UTC. Objective: simplify beginner-facing screens. Implementation, independent review and core verification complete; Linux browser CI/publication pending. Branch `ui/beginner-simplification`, baseline clean main `1f8be9c`.
+Updated: 2026-10-14 UTC. Objective complete: beginner screens simplified, independently reviewed, verified and published.
 
-## Changes
+## Delivered state
 
-Learning, cash drills, bot play, general exercises, progress and reference now use short primary prompts and feedback. Calculations, history, detailed stats and source/model explanations start collapsed. Necessary cards, position, prices, range weights/responses, fixed rake and closing-bet assumptions remain visible. Cash feedback shows accepted moves and one concrete numeric reason. First answers, hints, guided counts, random/replay logic, privacy and data are preserved.
+- Public repo: https://github.com/setliu22/poker-practice. Current branch `main`; feature `ui/beginner-simplification`. Checked application commit `121226ff70c28e2f62ff6111be3978f791227d5f`, tree `43f191da648386f7d0f156d5cecfad16c55dd59e`. Final handoff commit changes only PLAN/PROGRESS; inspect actual git status/log for its SHA.
+- Learning, cash, bot play, general exercises, progress and reference use short primary text. Math, history, detailed stats and source/model notes start closed and remain keyboard-accessible. Cash feedback shows accepted moves and a concrete numeric reason; necessary cards, position, price, weights/responses, rake and closing-bet assumptions stay visible.
+- Random/replay, first-answer/hint/guided accounting, privacy and saved data unchanged. Clear confirmation preserved and cash-only progress can now be cleared when the legacy exercise count is zero. No API, engine, schema, dependency, style/theme or licensed-data changes.
+- Local checkpoints `local-checkpoints/09b6dd6` and `local-checkpoints/cb7f3b8` retain equivalent CLI commits. Connector trees were compared exactly before synchronization. No databases, dependencies, builds, test artifacts or external solver files uploaded.
 
-Progress keeps clear confirmation and now allows clearing cash-only history even when the legacy exercise total is zero; a dedicated real-flow browser regression was added. No API, engine, schema, dependency or licensed-data changes. Root integrated disclosure selector fixes for learning progress, opening guides and draw-density reviews without removing underlying math/privacy assertions.
+## Evidence
 
-## Verification
+[GitHub run38632386078](https://github.com/setliu22/poker-practice/actions/runs/38632386078), at checked application `121226f`, completed successfully:
 
-- Independent review passed with no remaining app findings. Bot bet/raise wording and stale BB test copy were corrected. Final draw-density disclosure adjustment was lead-reviewed after that review; app code unchanged.
-- Independent `npm test -- --maxWorkers=1`: **326 passed, 2 optional solver tests skipped**, 33 files passed / one skipped, 46.84s.
-- Production build and final TypeScript passed. Full Playwright collection: **138 cases in 15 files**; collection is not execution. Linux CI still needed for actual desktop/mobile behavior.
-- Meaningful browser checks cover closed/keyboard-opened details, short feedback, visible required inputs, first-answer privacy/hints/reload, random/replay, complete gameplay, dialog focus, 320px bounds and cash-only clear confirmation.
-- `git diff --check` passed. Logs `/tmp/beginner-functional-{unit,build,browser-list,types}.log`. Local Browser plugin has no available browser; project Chromium has the known Mach launch block. No redundant browser launch attempted.
+- **326 unit/integration tests passed**, two optional real-solver tests skipped; 33 files passed / one skipped.
+- **Production build passed**, including TypeScript.
+- **All 138 desktop/mobile browser cases passed**, including closed/opened details, short feedback with visible required inputs, keyboard/focus, 320px bounds, complete gameplay, privacy, hints, immutable answers, random/replay, errors and cash-only clear confirmation.
+- Independent code reviewer and functional tester passed. First CI run found a progress-label mismatch and a test incorrectly nesting separate range/bot-estimate disclosures; narrow fixes independently reviewed, built, then full CI passed. Mathematical/privacy assertions preserved.
+- `git diff --check` and local documentation links passed. Final docs-only handoff was self-reviewed; it does not change checked application code.
+- Local logs: `/tmp/beginner-functional-{unit,build,browser-list,types}.log`. Browser plugin has no available connection; local Chromium has a Mach launch block. Linux CI supplies real browser evidence. Optional solver bridge unchanged; no live solver rerun.
 
-## Runtime / next action
+## Running app / next task
 
-App started in owned dev session **6321**, http://127.0.0.1:5173 (API3001). Prior session99275 no longer existed and both ports were free. Read-only HTTP checks verify simplified guide/cash/progress source and API health; learner DB preserved.
+Owned dev session **6321** serves http://127.0.0.1:5173 with API3001. Read-only HTTP checks confirm simplified source, final short progress labels and API health. Prior session99275 was already gone and ports were free before startup. Learner database preserved.
 
-Next: inspect staged source, commit and publish feature, verify remote tree/head and full Linux CI. Fix actual failures, integrate main and update final handoff. Workers completed their assigned roles and returned ownership; only lead work remains. Current tools cannot delete historical agent entries.
+No required work remains. Begin any next task at START_HERE.md and inspect the actual tree. All workers completed their scoped tickets and returned ownership; only lead work remains active during final handoff. Current tools cannot delete historical agent entries.
 
-Node: `~/.local/share/poker-practice/node-v24.21.0-darwin-arm64/bin`. GitHub connector writes work; CLI credentials are session-limited. Preserve metadata-equivalent checkpoints and compare trees before synchronizing connector commits. Never publish learner data, dependencies, artifacts or external solver. Earlier cash/randomized features remain intact.
-
-## CI follow-up
-
-GitHub run38630837672 on `e1500a2` passed unit tests/build and134/138 browser cases. Two assertions failed in each project: inconsistent cash progress skill names ('River value betting' versus the shorter control name 'Value bets'), and a lead-added test that assumed the separate opponent-range disclosure was nested inside bot estimates. Progress now uses the existing short skill labels consistently; the draw-density test checks its own closed disclosure before opening it and retains all mathematical/keyboard/mobile assertions. Narrow independent follow-up review and production build passed. App/API/engine mechanics unchanged. Next: publish these two-file fixes and rerun Linux full verification; main integration remains pending.
+Node: `~/.local/share/poker-practice/node-v24.21.0-darwin-arm64/bin`. GitHub connector writes are authenticated; CLI credentials are session-limited. Preserve metadata-equivalent checkpoints, compare trees before synchronization, and do not include learner data/artifacts/external solver in publication.
