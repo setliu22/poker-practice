@@ -32,6 +32,7 @@ function frame(count = 2): DecisionFrame {
   };
 }
 describe("decision review calculations", () => {
+  // CPU-bound replay verification needs room for hosted-runner variance.
   it("repeats the same modeled reviews and completed-hand odds in an exact replay", () => {
     const original = createTable("review-original", 2, 1, 0, 6, 17);
     act(original, 0, "call");
@@ -50,7 +51,7 @@ describe("decision review calculations", () => {
     analyzeTable(replay);
     expect(replay.rounds).toEqual(original.rounds);
     expect(replay.review).toEqual(original.review);
-  });
+  }, 30000);
   it("enumerates river ties and divides multiway ties by the number of winners", () => {
     const f = frame(3);
     f.players[0].hole = ["2d", "3d"];

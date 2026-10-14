@@ -73,6 +73,8 @@ Prerequisites: optional pinned GTOpen install built by `npm run solver:setup`, i
 
 A committed workflow is not a CI pass. After upload, inspect the actual run and record its result or pending status in `PROGRESS.md`. Linux CI also provides another environment when a local browser runtime cannot launch.
 
+CI runs unit/integration files with `npm test -- --maxWorkers=1` to keep exhaustive runout and simulation checks from competing for hosted CPU. The generation/diversity and exact-replay cases have explicit bounded computational budgets; their assertions and sample counts stay intact. This does not change API responsiveness assertions or add automatic retries.
+
 ## Functional smoke checklist
 
 Use `npm run dev`, or `npm run build` then `npm start` for built assets. Use dedicated temporary test data for destructive flows.

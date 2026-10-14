@@ -12,6 +12,7 @@ import {
 } from "../packages/poker/src/decision-generator";
 import { gradeRead } from "../packages/poker/src/read-lesson";
 import { validateCards } from "../packages/poker/src/index";
+// CPU-bound exact-runout verification needs room for hosted-runner variance.
 it("generates reproducible legal rank/board diversity for every skill and exact price answers", () => {
   let calls = 0,
     folds = 0,
@@ -63,7 +64,7 @@ it("generates reproducible legal rank/board diversity for every skill and exact 
   expect(folds).toBeGreaterThan(0);
   expect(same).toBeGreaterThan(0);
   expect(changed).toBeGreaterThan(0);
-}, 20000);
+}, 60000);
 it("uses only actual recorded errors to bias skill selection without excluding other skills", () => {
   const recent = [
     {

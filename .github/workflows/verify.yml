@@ -22,7 +22,8 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Unit and integration tests
-        run: npm test
+        # Exact runout and simulation suites compete for the hosted runner's CPU.
+        run: npm test -- --maxWorkers=1
       - name: Production build
         run: npm run build
       - name: Install browser and system dependencies
