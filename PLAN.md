@@ -1,35 +1,33 @@
 # Active plan
 
-Status: Complete — randomized guide delivered, independently reviewed and verified. Owner: lead. Baseline clean `main` at `8204eef`; branch `fix/randomized-preflop-walkthrough`.
+Status: In progress. Owner: lead. Branch `ui/beginner-simplification`, baseline clean `main` at `1f8be9c`.
 
-## Objective and acceptance
+## Objective
 
-User found fixed KQs/KTo/AKs walkthrough scenes and wants random scenarios. Explain why deciding to open is distinct from choosing an opening size: the app uses an authored 2.5-BB baseline size for the entire opening range, not an amount calculated from one hand's strength. Keep context/range/position, opponent responses and upstream sizing limits explicit.
+User wants simpler beginner screens with only necessary text. Reduce visible repetition and jargon across learning, decision practice, general exercises, progress and bot play. Show the hand/question, essential decision inputs, controls and one useful takeaway. Put optional history, calculations, detailed stats and source notes behind short disclosures. Keep brief qualifiers where needed to avoid presenting study assumptions or bot forecasts as proven strategy.
 
-- Generate fresh legal cards, hand classes, position contrasts and observed opposing raise totals. The instructional sequence stays coherent: the same comparison hand must appear in both earlier and button positions; the same raised-pot situation must persist through call-cost/re-raise questions.
-- New randomized walkthrough button changes substantive scenarios and clears old answers; replay/back navigation preserves current scenarios. Only reveal chart agreement after answering or explicitly opening a hint.
-- Support directly provided 6/9-player charts, default nine. Show correct seats, folds, remaining players, blinds and pot amounts. No inferred eight-seat chart or claimed optimal sizing.
-- Retain deterministic generation and backward-compatible six-player helper defaults. Preserve old lessons, data, licensed chart definitions and running app.
-- Meaningful unit fixtures, desktop/mobile browser cases, build, independent review and functional verification. Publish reviewed result through authenticated GitHub and verify Linux CI, because local Chromium is blocked.
+## Acceptance
 
-## Contracts and ownership
+- Default learning and feedback are markedly shorter; no repeated multi-paragraph caveats, sizing explanations or stacked instructional blocks.
+- A beginner can understand the next action and units. Necessary pot/call/rake/range-response assumptions stay visible; model limits are concise and optional detail remains accessible.
+- Preserve random generation, all tables/modes, first-answer/hint accounting, conditional grading, privacy, persistence, replay, export/clear, keyboard/focus, pending/error behavior and mobile bounds. No API, engine, schema or licensed data changes.
+- Meaningful browser cases verify disclosures start closed and can be opened, concise feedback still provides essential context, and all original core flows remain usable. Reuse/update existing functional tests for intentional visible-copy changes; do not weaken hidden-answer or state assertions.
+- Independent code review and functional checks/build; Linux full browser CI if local browser remains blocked. Update running app and verify delivered module rather than relying on filesystem watch.
 
-Builder G owns `packages/shared/src/preflop-walkthrough.ts` and `tests/preflop-walkthrough.test.ts`. Preserve existing exports/defaults. Add `walkthroughSeatsFor(players:6|9)`, extend `walkthroughChart(charts,position,players=6)` and `preflopTransfer(charts,seed,players=6)`. Add `generateWalkthrough(charts,seed,players:6|9)` returning `{players,seats,opening:{hand,hole},contrast:{hand,hole,earlyPosition},raised:{hand,hole,raiseTo,heroPosted:0,callCost,minimumRaiseTo,potChips},fingerprint}`. Opening selection includes both raise/fold hands. Contrast is outside the earlier direct chart but inside the button chart. Raised hands do not imply a strategic call/raise; only arithmetic is graded. Use full uint32 seeds, proper pairs/suited/offsuit cards, legal 20/25/30/40-chip observed raises; BB10 and SB5. Fingerprint excludes cosmetic suit variation and seed.
+## Ownership and tasks
 
-Builder U owns `apps/web/src/PreflopWalkthrough.tsx`, appended scoped rules in `styles.css`, and `tests/browser/preflop-walkthrough.spec.ts`. Consume G contract, default9/selector6or9, optional hints, clear sizing explanation and whitespace fixes. New vs replay distinction, stable paired scenes, current-state reset on table changes, no stale feedback, keyboard/focus/retry and 320px bounds. Only supported matching charts; no answer leakage in prompts. Seed generation uses crypto, bounded recent fingerprint avoidance; final transfer fresh choices cannot accidentally repeat current semantic position/hand.
+| ID  | Role                                     | Exclusive write paths                                                                                                                                                                                     | Status                  |
+| --- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| L   | Learning UI builder                      | `PreflopWalkthrough.tsx`, `Learn.tsx`, `ReadLesson.tsx`; browser preflop-walkthrough/learning/read-lesson tests                                                                                           | Complete                |
+| C   | Cash UI builder                          | `CashPractice.tsx`; browser cash-practice tests                                                                                                                                                           | Complete                |
+| B   | Bot UI builder                           | `BotPractice.tsx`, `RoundReview.tsx`, `MoveFacts.tsx`, `DecisionRating.tsx`, `MoveRecommendation.tsx`, `GameStats.tsx`; browser bots/compact-table/reset-hand/decision-rating/ranges/recommendation tests | Complete                |
+| M   | Lead general practice/progress/reference | `main.tsx`, `styles.css`; browser practice/deal-modes/preflop/draw-density tests; root docs/README                                                                                                        | Complete                |
+| R   | Independent reviewer                     | Read only after builders settle                                                                                                                                                                           | Complete                |
+| V   | Independent tester / Linux CI            | Read only after builders settle                                                                                                                                                                           | Core passed; CI pending |
+| I   | Lead integration/publication/handoff     | Root docs, commits, reviewed integration                                                                                                                                                                  | In progress             |
 
-Lead owns root docs, README, source note, integration and publication. G/U may propose contract changes through lead, never edit one another's files. Readonly reviewer/tester inspect final diff and test behavior after builders settle.
+All UI paths are under `apps/web/src/`; browser tests under `tests/browser/`. Builders may request ownership expansion through lead; shared styles remain lead-owned. Preserve accessible region names where practical. Shorten labels deliberately and update only relevant semantic selectors when labels change. Keep default nine-seat learning and 2–9-seat cash/bot support.
 
-| Task | Role                         | Dependency                                               | Status   |
-| ---- | ---------------------------- | -------------------------------------------------------- | -------- |
-| G    | Generation builder           | Contract above                                           | Complete |
-| U    | UI/browser builder           | Contract above; wait for generator before running checks | Complete |
-| R    | Independent reviewer         | Stable G/U                                               | Complete |
-| V    | Functional tester / Linux CI | Stable G/U                                               | Complete |
-| I    | Lead integration/handoff     | R/V                                                      | Complete |
+Use existing guide/engine explanations under optional details rather than inventing new mathematical feedback. Do not hide range probabilities or call/fold responses needed to answer a drill. Visible conditional labels can be short, e.g. 'For this practice range' / 'Bot estimate'. No inferred mastery or removal of chart/source limits. Progress may summarize totals with breakdowns collapsed; hinted/independent/guided results must remain distinct.
 
-Previous online-cash lab is complete: code `bc8661f`, GitHub run 38510972941 passed315 tests/build/118 browser cases. Preserve it. Each worker needs this role/ticket and must return ownership when done; no idle/unassigned agents.
-
-## Delivery evidence
-
-Application commit `30effb0efc8b9733ff72f5bb758b71e028f42233`: [GitHub run 38574347619](https://github.com/setliu22/poker-practice/actions/runs/38574347619) passed 326 unit/integration tests (two optional solver skips), production build and all 132 desktop/mobile browser cases. Independent reviewer/tester completed their scoped tickets. Final changes are documentation only. The app was restarted and HTTP-verified to serve the new guide at http://127.0.0.1:5173.
+Previous randomized walkthrough and cash lab fully delivered: application `30effb0`, GitHub run38574347619 passed326 tests/build/132 browsers. Preserve their behavior. Workers are spawned only with the tickets above; record results and return ownership on completion.

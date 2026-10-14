@@ -80,11 +80,25 @@ for (const rating of fixtures) {
       .getByRole("button", { name: "Start table", exact: true })
       .click();
     await page.getByRole("button", { name: /^Review decisions/ }).click();
+    const estimate = page.locator(".bot-estimate-details");
+    await expect(estimate).not.toHaveAttribute("open", "");
+    await expect(page.locator(".model-rating")).toBeHidden();
+    await estimate.locator(":scope > summary").focus();
+    await page.keyboard.press("Enter");
     const panel = page.getByRole("region", {
       name: "Model agreement score",
       exact: true,
     });
     await expect(panel).toBeVisible();
+    await expect(
+      panel.getByText("Bot model estimate. A 100 does not mean perfect play.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    const explanation = panel.getByText("How the score works", { exact: true });
+    await expect(panel.locator("details")).not.toHaveAttribute("open", "");
+    await explanation.focus();
+    await page.keyboard.press("Enter");
     await expect(panel).toContainText(
       "cards revealed afterward do not affect it",
     );
@@ -113,9 +127,6 @@ for (const rating of fixtures) {
         );
       }
     }
-    const explanation = panel.getByText("How the score works", { exact: true });
-    await explanation.focus();
-    await page.keyboard.press("Enter");
     await expect(panel).toContainText("not a winning percentage");
     expect(
       await page.evaluate(

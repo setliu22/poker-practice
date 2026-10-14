@@ -121,11 +121,10 @@ export function RoundReview({
     <section className="round-reviews" aria-label="Decision reviews">
       <h2>Decision reviews</h2>
       <p className="quiet">
-        Estimates use the cards, public actions, and pot at each decision. They
-        compare behavior under a bot model, not optimal poker strategy.{" "}
+        Bot estimates use only what was known at your turn.{" "}
         {complete
-          ? "All hole cards are now revealed for study."
-          : "Actual bot cards stay hidden until the hand ends."}
+          ? "Revealed cards are available below."
+          : "Bot cards stay hidden until the hand ends."}
       </p>
       {rounds.length === 0 ? (
         <p>Your first action will appear here.</p>
@@ -139,7 +138,7 @@ export function RoundReview({
             <summary>
               <span className="pill">{r.street}</span>
               <strong>{r.action}</strong>
-              <span className="quiet">Pot {r.pot}</span>
+              <span className="quiet">Pot {r.pot} chips</span>
             </summary>
             <div className="decision-body">
               <div className="review-cards">
@@ -157,142 +156,153 @@ export function RoundReview({
                 </div>
               </div>
               <MoveFacts review={r} />
-              {r.modelRating && <DecisionRating rating={r.modelRating} />}
-              {r.preflopGuide && <PreflopGuidePanel guide={r.preflopGuide} />}
-              <Odds
-                odds={r.rangeProbability}
-                title="Against the estimated ranges"
-              />
-              <div className="review-verdict">
-                <h3>{r.verdict}</h3>
-                <p>{r.explanation}</p>
-              </div>
-              <details className="model-details advanced-comparison">
-                <summary>Advanced: modeled action comparison</summary>
-                <div className="value-scroll">
-                  <table className="action-values">
-                    <caption>
-                      Modeled average net chips from this decision
-                    </caption>
-                    <thead>
-                      <tr>
-                        <th>Action</th>
-                        <th>Expected chips</th>
-                        <th>Difference vs your choice</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {r.values.map((v) => {
-                        const comparison = r.comparisons?.find(
-                          (c) => c.key === v.key,
-                        );
-                        return (
-                          <tr
-                            key={v.key}
-                            className={
-                              v.key === r.chosenKey ? "chosen-action" : ""
-                            }
-                          >
-                            <th>
-                              {v.label}
-                              {v.key === r.chosenKey ? " · You chose this" : ""}
-                            </th>
-                            <td>
-                              {v.chips >= 0 ? "+" : ""}
-                              {v.chips.toFixed(1)}
-                              <small className="value-precision">
-                                {v.exact
-                                  ? "Fully enumerated under model"
-                                  : `± ${v.margin.toFixed(1)} sampling`}
-                              </small>
-                            </td>
-                            <td>
-                              {comparison ? (
-                                <>
-                                  {comparison.difference >= 0 ? "+" : ""}
-                                  {comparison.difference.toFixed(1)}
-                                  {comparison.samples
-                                    ? ` ± ${comparison.margin.toFixed(1)}`
-                                    : ""}
-                                  <small className="value-precision">
-                                    {comparison.samples
-                                      ? "Paired sampling interval"
-                                      : "Fully enumerated under model"}
-                                  </small>
-                                </>
-                              ) : v.key === r.chosenKey ? (
-                                "Baseline"
-                              ) : (
-                                "Unavailable"
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+              <details className="model-details bot-estimate-details">
+                <summary>Bot estimate and details</summary>
                 <p className="quiet">
-                  Positive differences favor the alternative. Intervals measure
-                  sampling noise only; they do not measure how realistic the
-                  bots are. Full enumeration removes sampling error; it does not
-                  establish the best action against real players.
+                  These forecasts compare choices under the bot model; they do
+                  not prove optimal play.
                 </p>
-                <details className="model-details">
-                  <summary>How this comparison works</summary>
-                  <p>{r.model}</p>
-                  <p>
-                    Fold is zero because chips already committed cannot be
-                    recovered by folding. A positive number means an average
-                    gain relative to your stack at this decision. Side pots and
-                    split pots are settled separately.
+                {r.modelRating && <DecisionRating rating={r.modelRating} />}
+                {r.preflopGuide && <PreflopGuidePanel guide={r.preflopGuide} />}
+                <Odds
+                  odds={r.rangeProbability}
+                  title="Against the estimated ranges"
+                />
+                <div className="review-verdict">
+                  <h3>{r.verdict}</h3>
+                  <p>{r.explanation}</p>
+                </div>
+                <details className="model-details advanced-comparison">
+                  <summary>Advanced: modeled action comparison</summary>
+                  <div className="value-scroll">
+                    <table className="action-values">
+                      <caption>
+                        Modeled average net chips from this decision
+                      </caption>
+                      <thead>
+                        <tr>
+                          <th>Action</th>
+                          <th>Expected chips</th>
+                          <th>Difference vs your choice</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {r.values.map((v) => {
+                          const comparison = r.comparisons?.find(
+                            (c) => c.key === v.key,
+                          );
+                          return (
+                            <tr
+                              key={v.key}
+                              className={
+                                v.key === r.chosenKey ? "chosen-action" : ""
+                              }
+                            >
+                              <th>
+                                {v.label}
+                                {v.key === r.chosenKey
+                                  ? " · You chose this"
+                                  : ""}
+                              </th>
+                              <td>
+                                {v.chips >= 0 ? "+" : ""}
+                                {v.chips.toFixed(1)}
+                                <small className="value-precision">
+                                  {v.exact
+                                    ? "Fully enumerated under model"
+                                    : `± ${v.margin.toFixed(1)} sampling`}
+                                </small>
+                              </td>
+                              <td>
+                                {comparison ? (
+                                  <>
+                                    {comparison.difference >= 0 ? "+" : ""}
+                                    {comparison.difference.toFixed(1)}
+                                    {comparison.samples
+                                      ? ` ± ${comparison.margin.toFixed(1)}`
+                                      : ""}
+                                    <small className="value-precision">
+                                      {comparison.samples
+                                        ? "Paired sampling interval"
+                                        : "Fully enumerated under model"}
+                                    </small>
+                                  </>
+                                ) : v.key === r.chosenKey ? (
+                                  "Baseline"
+                                ) : (
+                                  "Unavailable"
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="quiet">
+                    Positive differences favor the alternative. Intervals
+                    measure sampling noise only; they do not measure how
+                    realistic the bots are. Full enumeration removes sampling
+                    error; it does not establish the best action against real
+                    players.
                   </p>
+                  <details className="model-details">
+                    <summary>How this comparison works</summary>
+                    <p>{r.model}</p>
+                    <p>
+                      Fold is zero because chips already committed cannot be
+                      recovered by folding. A positive number means an average
+                      gain relative to your stack at this decision. Side pots
+                      and split pots are settled separately.
+                    </p>
+                  </details>
                 </details>
+                {r.callThreshold !== null && (
+                  <div className="math-note">
+                    <h3>Call price</h3>
+                    <p>
+                      Call {r.call} into {r.pot}: {r.call} ÷ ({r.pot} + {r.call}
+                      ) ={" "}
+                      <strong>
+                        {r.callThreshold.toFixed(1)}% required pot share
+                      </strong>
+                      .
+                    </p>
+                    <p className="quiet">
+                      This threshold applies directly when this call closes the
+                      action, you can win the whole pot, and there are no future
+                      bets. Future betting and other players’ responses can
+                      change the decision; raw equity alone cannot grade the
+                      call.
+                    </p>
+                  </div>
+                )}
+                {r.bluffThreshold !== null && (
+                  <div className="math-note">
+                    <h3>If this were a pure bluff</h3>
+                    <p>
+                      Risk {r.risk} to win {r.pot}. Everyone must fold more than{" "}
+                      <strong>{r.bluffThreshold.toFixed(1)}%</strong> of the
+                      time to profit if you always lose when called.
+                    </p>
+                    <p className="quiet">
+                      By the end of the modeled hand after the{" "}
+                      {r.values
+                        .find((v) => v.key === "raise")
+                        ?.label.toLowerCase()}{" "}
+                      candidate, every opponent folded{" "}
+                      {r.values
+                        .find((v) => v.key === "raise")
+                        ?.allFold.toFixed(1)}
+                      % of the time. Opponents may call first and fold later, so
+                      this is not the immediate fold rate required by the
+                      pure-bluff calculation above. Calls and later bets can
+                      change the chips won or lost.
+                    </p>
+                  </div>
+                )}
+                <ResponsePreview review={r} />
               </details>
-              {r.callThreshold !== null && (
-                <div className="math-note">
-                  <h3>Call price</h3>
-                  <p>
-                    Call {r.call} into {r.pot}: {r.call} ÷ ({r.pot} + {r.call})
-                    ={" "}
-                    <strong>
-                      {r.callThreshold.toFixed(1)}% required pot share
-                    </strong>
-                    .
-                  </p>
-                  <p className="quiet">
-                    This threshold applies directly when this call closes the
-                    action, you can win the whole pot, and there are no future
-                    bets. Future betting and other players’ responses can change
-                    the decision; raw equity alone cannot grade the call.
-                  </p>
-                </div>
-              )}
-              {r.bluffThreshold !== null && (
-                <div className="math-note">
-                  <h3>If this were a pure bluff</h3>
-                  <p>
-                    Risk {r.risk} to win {r.pot}. Everyone must fold more than{" "}
-                    <strong>{r.bluffThreshold.toFixed(1)}%</strong> of the time
-                    to profit if you always lose when called.
-                  </p>
-                  <p className="quiet">
-                    By the end of the modeled hand after the{" "}
-                    {r.values
-                      .find((v) => v.key === "raise")
-                      ?.label.toLowerCase()}{" "}
-                    candidate, every opponent folded{" "}
-                    {r.values
-                      .find((v) => v.key === "raise")
-                      ?.allFold.toFixed(1)}
-                    % of the time. Opponents may call first and fold later, so
-                    this is not the immediate fold rate required by the
-                    pure-bluff calculation above. Calls and later bets can
-                    change the chips won or lost.
-                  </p>
-                </div>
-              )}
-              <ResponsePreview review={r} />
               <details className="range-details">
                 <summary>Opponent ranges · what could they have?</summary>
                 <p>
@@ -360,7 +370,8 @@ export function RoundReview({
                 ))}
               </details>
               {r.actualProbability && (
-                <section className="actual-review">
+                <details className="actual-review model-details">
+                  <summary>Revealed cards and odds</summary>
                   <h3>What the bots actually held</h3>
                   <div className="range-examples">
                     {r.actualCards?.map((p) => (
@@ -385,7 +396,7 @@ export function RoundReview({
                     from the deck. This hindsight calculation does not establish
                     whether your action was good.
                   </p>
-                </section>
+                </details>
               )}
             </div>
           </details>

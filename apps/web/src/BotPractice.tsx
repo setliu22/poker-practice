@@ -657,8 +657,8 @@ export function BotPractice() {
       </div>
       {screen === "play" && table && (
         <p className="quiet table-setup-note" id="table-setup-note">
-          These settings apply to New table. Your current game stays saved in
-          Games; Deal next hand keeps its existing settings.
+          Settings apply to New table. Deal next hand keeps this table’s
+          settings. Games saves your current table.
         </p>
       )}
       <nav className="bot-view-nav" aria-label="Bot table views">
@@ -680,17 +680,24 @@ export function BotPractice() {
       </nav>
       {screen === "play" && (
         <p className="table-rules">
-          No-limit Hold’em · Blinds 5 / 10 · 1,000 chips per player, reset each
-          hand · No rake
+          No-limit Hold’em · Blinds 5 / 10 chips · 1,000 chips per player, reset
+          each hand · No rake
         </p>
       )}
       {screen === "play" && (table?.dealMode ?? dealMode) === "easy" && (
-        <p className="easy-deal-note">
-          <strong>Easy deals:</strong> pairs, two cards ten or higher, suited
-          aces, and suited connectors from 65s. This filters your starting
-          cards. Bots play normally; facing a raise can still make these hands a
-          fold.
-        </p>
+        <div className="easy-deal-note">
+          <p>
+            <strong>Easy deals:</strong> stronger starting cards. Bots play
+            normally; folding may still be right.
+          </p>
+          <details>
+            <summary>Which hands?</summary>
+            <p>
+              Pairs, two cards ten or higher, suited aces, and suited connectors
+              from 65s.
+            </p>
+          </details>
+        </div>
       )}
       {error && (
         <p role="alert" className="error">
@@ -772,12 +779,7 @@ export function BotPractice() {
             <section className="panel">
               <h2>Play against local bots</h2>
               <p>
-                Choose 2–9 players above to start. Games save automatically;
-                reopen them from Games.
-              </p>
-              <p className="quiet">
-                Open a bot’s Playstyle button for its tendencies. Cards are
-                revealed after the hand.
+                Choose 2–9 players, then Start table. Games save automatically.
               </p>
             </section>
           ) : (
@@ -993,8 +995,10 @@ export function BotPractice() {
                     />
                     <p className="quiet">
                       {legal.toCall
-                        ? `Call ${legal.toCall} chips${legal.toCall === table.players[0].stack ? " (all-in)" : ""}. Current bet: ${table.currentBet}.`
-                        : "No bet to call."}
+                        ? `Call ${legal.toCall} chips${legal.toCall === table.players[0].stack ? " (all-in)" : ""} to stay in. Current bet: ${table.currentBet} chips.`
+                        : legal.canRaise
+                          ? `Check for free, or ${table.currentBet > 0 ? "raise" : "bet"}.`
+                          : "Check for free."}
                     </p>
                     <div className="table-action-buttons">
                       <button
@@ -1037,6 +1041,7 @@ export function BotPractice() {
                         <div>
                           <input
                             id="raise-to"
+                            aria-describedby="raise-limits"
                             type="number"
                             inputMode="numeric"
                             min={legal.minRaiseTo}
@@ -1063,10 +1068,11 @@ export function BotPractice() {
                             Set all-in
                           </button>
                         </div>
-                        <small className="quiet">
+                        <small className="quiet" id="raise-limits">
                           Minimum {legal.minRaiseTo} · Maximum{" "}
-                          {legal.maxRaiseTo}. “Set all-in” fills the amount;
-                          submit to bet.
+                          {legal.maxRaiseTo} chips total. Set all-in fills the
+                          amount; press {table.currentBet ? "Raise" : "Bet"} to
+                          play.
                         </small>
                       </form>
                     )}
@@ -1119,8 +1125,8 @@ export function BotPractice() {
                       </button>
                     </div>
                     <p className="quiet">
-                      Next hand moves the button. Replay repeats this deal in a
-                      separate saved game and keeps this result.
+                      Replay repeats this deal in a separate game. This result
+                      stays saved.
                     </p>
                   </section>
                 )}
@@ -1141,20 +1147,22 @@ export function BotPractice() {
                 </div>
               </section>
               <aside className="panel hand-history">
-                <h2>Recent actions</h2>
-                <ol>
-                  {table.history.slice(-3).map((entry, i) => (
-                    <li key={i}>
-                      <span className="quiet">
-                        {entry.street} ·{" "}
-                        {entry.seat === null
-                          ? "Table"
-                          : table.players[entry.seat].name}
-                      </span>
-                      <span>{entry.text}</span>
-                    </li>
-                  ))}
-                </ol>
+                <details>
+                  <summary>Recent actions</summary>
+                  <ol>
+                    {table.history.slice(-3).map((entry, i) => (
+                      <li key={i}>
+                        <span className="quiet">
+                          {entry.street} ·{" "}
+                          {entry.seat === null
+                            ? "Table"
+                            : table.players[entry.seat].name}
+                        </span>
+                        <span>{entry.text}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
               </aside>
             </div>
           )}

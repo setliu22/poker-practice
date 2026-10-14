@@ -141,8 +141,8 @@ function EarlierLearn() {
           <section className="panel">
             <h2>All-in decision practice</h2>
             <p>
-              Practice varied draws against explicit ranges, compare the call
-              price, and test the same hand at a different price.
+              Compare your hand's chance against a supplied range with the call
+              price.
             </p>
             <button className="primary" onClick={() => setReading(true)}>
               Open all-in decision practice
@@ -151,27 +151,20 @@ function EarlierLearn() {
           <section className="panel learning-lesson">
             <h2>Find the hands that would pay you</h2>
             <p>
-              A <strong>value bet</strong> aims to get called by weaker hands.
-              Having a strong hand is a starting point; you still need to ask
-              which hands your opponent will call with.
+              A <strong>value bet</strong> gets calls from weaker hands. Ask:
+              “Which hands do I beat, and would they call?”
             </p>
             <p>
               If weaker hands fold and stronger hands call, checking can earn
-              more on average. Checking keeps the weaker hands in the showdown
-              without putting more chips at risk against stronger hands.
+              more.
             </p>
             <p>
-              In this lesson, you get an exact opponent range—a list of possible
-              hands—and their responses. Choose a move, then identify what your
-              bet would accomplish.
+              Choose a move and a reason using the supplied possible hands and
+              responses.
             </p>
-            <div className="learning-example">
-              <strong>Ask before betting:</strong>
-              <p>“Which hands do I beat, and would those hands call?”</p>
-            </div>
             <p className="quiet">
-              8 short river exercises · No timer · Exact calculations under
-              stated responses. Free-play opponents require estimates.
+              8 river exercises · No timer · Results depend on the supplied
+              responses.
             </p>
             <button
               className="primary"
@@ -196,7 +189,6 @@ function EarlierLearn() {
               <p>
                 Both correct on transfer exercises:{" "}
                 {progress.transferBothCorrect}/{progress.transferAttempts}.
-                Transfer means applying the idea to a changed situation.
               </p>
             </section>
           )}
@@ -246,8 +238,8 @@ function EarlierLearn() {
               ))}
             </ul>
             <p>
-              Original educational example. These response rules isolate value
-              betting; they are not predictions of how everyone plays.
+              These practice responses are assumptions, not predictions of real
+              opponents.
             </p>
           </details>
           {!feedback ? (
@@ -282,8 +274,7 @@ function EarlierLearn() {
                     checked={reason === "weaker-call"}
                     onChange={() => setReason("weaker-call")}
                   />
-                  Get calls from weaker hands, although stronger hands may call
-                  too
+                  Get calls from weaker hands
                 </label>
                 <label>
                   <input
@@ -315,12 +306,15 @@ function EarlierLearn() {
                 <strong>Reason:</strong>{" "}
                 {feedback.reasonCorrect ? "Correct" : "Needs revision"}
               </p>
-              <p>{feedback.explanation}</p>
               <p>
-                <strong>Takeaway:</strong> {feedback.takeaway}
+                Betting averages {feedback.betEv.toFixed(1)} chips versus{" "}
+                {feedback.checkEv.toFixed(1)} for checking, with these
+                responses.
               </p>
+              <p>{feedback.takeaway}</p>
               <details>
                 <summary>Show the exact calculation</summary>
+                <p>{feedback.explanation}</p>
                 <p>
                   These are net chips from the current decision. A fold wins the
                   current pot. At showdown: pot share × final pot − your new
@@ -381,9 +375,8 @@ function EarlierLearn() {
         <section className="panel">
           <h2>What to take into your next hand</h2>
           <p>
-            Identify specific weaker hands that could call before you make a
-            value bet. If they fold, compare checking with betting into stronger
-            hands.
+            Before betting, name weaker hands that would call. Compare betting
+            with checking.
           </p>
           <p>
             This session: {results.filter((f) => f.actionCorrect).length}/
@@ -394,9 +387,8 @@ function EarlierLearn() {
           {missed.length > 0 ? (
             <>
               <p>
-                You had trouble with {missed.length} situation
-                {missed.length === 1 ? "" : "s"}. Revisit them and explain the
-                calls before choosing.
+                Revisit {missed.length} situation
+                {missed.length === 1 ? "" : "s"} to practice your reasoning.
               </p>
               <button
                 className="primary"
@@ -411,8 +403,8 @@ function EarlierLearn() {
             </>
           ) : (
             <p>
-              You answered both parts correctly throughout this session. Try the
-              idea in bot practice; real opponents’ responses are uncertain.
+              Both parts correct throughout. Try bot practice, where responses
+              are uncertain.
             </p>
           )}
           <button className="secondary" onClick={() => setScreen("lesson")}>
@@ -453,26 +445,26 @@ export function LearningProgressSummary({ refresh }: { refresh: unknown }) {
         Decisions correct: {data.decisionsCorrect}/{data.attempts} · Reasons
         correct: {data.reasonsCorrect}/{data.attempts}
       </p>
-      <p>
-        Transfer exercises with both correct: {data.transferBothCorrect}/
-        {data.transferAttempts}
-      </p>
-      <p className="quiet">
-        These measure the stated lesson situations, separately from chip profit
-        and free-play model estimates.
-      </p>
-      <ul>
-        {data.recent.slice(0, 4).map((r, i) => (
-          <li key={i}>
-            {r.title} ·{" "}
-            {r.actionCorrect && r.reasonCorrect
-              ? "Both correct"
-              : !r.reasonCorrect
-                ? "Revisit the reason"
-                : "Revisit the decision"}
-          </li>
-        ))}
-      </ul>
+      <p className="quiet">Results for these supplied lesson situations.</p>
+      <details>
+        <summary>Learning details</summary>
+        <p>
+          Transfer exercises with both correct: {data.transferBothCorrect}/
+          {data.transferAttempts}
+        </p>
+        <ul>
+          {data.recent.slice(0, 4).map((r, i) => (
+            <li key={i}>
+              {r.title} ·{" "}
+              {r.actionCorrect && r.reasonCorrect
+                ? "Both correct"
+                : !r.reasonCorrect
+                  ? "Revisit the reason"
+                  : "Revisit the decision"}
+            </li>
+          ))}
+        </ul>
+      </details>
     </section>
   );
 }
@@ -513,11 +505,7 @@ export function Learn() {
       <section className="panel cash-entry">
         <span className="eyebrow">Online cash · 2–9 seats</span>
         <h2>Online cash Decision Lab</h2>
-        <p>
-          Make a river decision before seeing feedback. Practice calls, value
-          bets, bluffs and multiway pots, then revisit your reasoning with a
-          fresh hand.
-        </p>
+        <p>Practice a river decision, then see why.</p>
         <button
           className="primary"
           onClick={() => {

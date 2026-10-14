@@ -37,6 +37,15 @@ test("complete exercise, show feedback, update progress and start next", async (
   ).toBeVisible();
   await page.getByRole("button", { name: "Progress", exact: true }).click();
   await expect(page.getByText("EXERCISES COMPLETED")).toBeVisible();
+  const stats = page.getByText("Detailed practice stats", { exact: true });
+  await expect(
+    page.getByRole("heading", { name: "Answer accuracy" }),
+  ).not.toBeVisible();
+  await stats.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: "Answer accuracy" }),
+  ).toBeVisible();
   await expect(
     page.getByText("1 attempts", { exact: true }).first(),
   ).toBeVisible();
@@ -71,6 +80,8 @@ test("all modes work and mobile layout stays within viewport", async ({
   await page.getByLabel("Street", { exact: true }).selectOption("turn");
   await page.getByLabel("Estimated equity").fill("30");
   await page.getByRole("button", { name: "Check my answer" }).click();
+  await expect(page.getByRole("table")).not.toBeVisible();
+  await page.getByText("Results for each hand", { exact: true }).click();
   await expect(page.getByRole("table")).toBeVisible();
   await page
     .getByRole("button", { name: "What beats me?", exact: true })
@@ -80,7 +91,7 @@ test("all modes work and mobile layout stays within viewport", async ({
   await page.getByRole("button", { name: "Check my answer" }).click();
   await page.getByText("Reveal possible stronger hand categories").click();
   await expect(
-    page.getByText(/Possible does not mean likely; a uniform/),
+    page.getByText(/Possible does not mean likely\. Better kickers/),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "Make a decision", exact: true })
@@ -127,9 +138,80 @@ test("clearing progress requires confirmation and can be cancelled", async ({
     .getByRole("button", { name: "Clear progress", exact: true })
     .click();
   await page.getByRole("button", { name: "Clear all progress" }).click();
+  await page.getByText("Detailed practice stats", { exact: true }).click();
   await expect(
     page.getByText("Your completed exercises will appear here."),
   ).toBeVisible();
+});
+test("cash-only progress can be cleared with confirmation", async ({
+  page,
+  request,
+}) => {
+  const created = await request.post("/api/cash-practice/drills", {
+    data: { players: 9, skill: "bluff-catch" },
+  });
+  expect(created.status()).toBe(201);
+  const drill = await created.json();
+  const saved = await request.post(
+    `/api/cash-practice/drills/${drill.id}/answer`,
+    {
+      data: {
+        phase: "initial",
+        action: drill.initial.options[0].action,
+        reasonId: drill.initial.reasons[0].id,
+        estimatePercent: 0,
+        confidence: "unsure",
+      },
+    },
+  );
+  expect(saved.ok()).toBe(true);
+  expect((await (await request.get("/api/progress")).json()).total).toBe(0);
+  expect(
+    (await (await request.get("/api/cash-practice/progress")).json()).attempts,
+  ).toBe(1);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Progress", exact: true }).click();
+  const clear = page.getByRole("button", {
+    name: "Clear progress",
+    exact: true,
+  });
+  await expect(clear).toBeEnabled();
+  await clear.click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Clear all progress", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  expect(
+    (await (await request.get("/api/cash-practice/progress")).json()).attempts,
+  ).toBe(0);
+});
+test("reference starts with short definitions and keeps optional detail accessible", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Reference", exact: true }).click();
+  const card = page.locator(".reference-grid .panel").filter({
+    has: page.getByRole("heading", {
+      name: "Value bets and bluffs",
+      exact: true,
+    }),
+  });
+  await expect(card).toContainText("Bet for value when weaker hands can call.");
+  const detail = card.locator("details");
+  await expect(detail).not.toHaveAttribute("open", "");
+  await expect(
+    card.getByText(/To compare betting expected values/),
+  ).not.toBeVisible();
+  await card.getByText("More details", { exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    card.getByText(/To compare betting expected values/),
+  ).toBeVisible();
+  const library = page.getByRole("region", { name: "Opening chart library" });
+  await expect(library).not.toBeVisible();
+  await page.getByText("Opening charts", { exact: true }).click();
+  await expect(library).toBeVisible();
 });
 test("practice needs no external network and cards remain visible", async ({
   page,

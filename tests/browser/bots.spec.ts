@@ -477,9 +477,19 @@ test("select a multiway table, play a hand, read feedback, and resume it", async
   await expect(
     page.getByRole("region", { name: "Decision reviews" }),
   ).toBeVisible();
+  const latest = page.locator(".decision-review").last();
+  const estimates = latest.locator(".bot-estimate-details");
+  await expect(estimates).not.toHaveAttribute("open", "");
+  await expect(latest.locator(".odds-grid").first()).toBeHidden();
+  await estimates.locator(":scope > summary").click();
   await expect(
     page.getByRole("heading", { name: "Against the estimated ranges" }).last(),
   ).toBeVisible();
+  await expect(latest.locator(".actual-review")).not.toHaveAttribute(
+    "open",
+    "",
+  );
+  await latest.getByText("Revealed cards and odds", { exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Against the actual cards" }).last(),
   ).toBeVisible();
@@ -598,6 +608,12 @@ test("saved games retain profit, show charts and can be reopened", async ({
   const chart = page.getByRole("group", {
     name: "Profit over time, 1 recorded hands",
   });
+  await expect(detail.locator(".profit-chart-details")).not.toHaveAttribute(
+    "open",
+    "",
+  );
+  await expect(chart).toBeHidden();
+  await detail.getByText("Profit chart", { exact: true }).click();
   await expect(chart).toBeVisible();
   await chart.getByRole("button").focus();
   await page.keyboard.press("Enter");
@@ -605,7 +621,9 @@ test("saved games retain profit, show charts and can be reopened", async ({
     /Hand 1.*cumulative profit/,
   );
   await expect(
-    page.getByText("Poker skill is not scored.", { exact: true }),
+    page.getByText("Completed hands only. Poker skill is not scored.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await detail.getByText("About the estimates", { exact: true }).click();
   await expect(

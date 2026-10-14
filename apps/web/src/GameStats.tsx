@@ -81,7 +81,7 @@ export function GameStats({
                 >
                   <span className="game-list-title">
                     Game {g.gameNumber}
-                    <span>{formatChips(g.profit)}</span>
+                    <span>{formatChips(g.profit)} chips</span>
                   </span>
                   <span className="quiet">
                     {g.players} players · {g.hands}{" "}
@@ -161,26 +161,9 @@ export function GameStats({
                   <span>Hands completed</span>
                   <strong>{current.hands}</strong>
                 </div>
-                <div>
-                  <span>Decisions reviewed</span>
-                  <strong>{current.decisions}</strong>
-                </div>
-                {current.modelRating && (
-                  <div>
-                    <span>Model agreement</span>
-                    <strong>
-                      {current.modelRating.score === null
-                        ? current.modelRating.inconclusiveDecisions > 0
-                          ? "Inconclusive"
-                          : "Not rated"
-                        : `${current.modelRating.score.toFixed(1)} / 100`}
-                    </strong>
-                  </div>
-                )}
               </div>
               <p className="quiet stats-caption">
-                Completed hands only. Chip profit records results; it does not
-                measure decision quality.
+                Completed hands only. Poker skill is not scored.
               </p>
               {!current.replayOf &&
                 current.currentHand >
@@ -190,20 +173,40 @@ export function GameStats({
                     unavailable. Profit starts with the first recorded hand.
                   </p>
                 )}
-              <p className="quiet">Poker skill is not scored.</p>
-              {current.modelRating && (
-                <p className="quiet model-rating-coverage">
-                  Model agreement averages {current.modelRating.ratedDecisions}{" "}
-                  rated decisions. {current.modelRating.inconclusiveDecisions}{" "}
-                  inconclusive and {current.modelRating.unavailableDecisions}{" "}
-                  unrated decisions are excluded. This uses information
-                  available at each move, not the hand’s result, and measures
-                  agreement with the bot model rather than general strategy.
-                </p>
-              )}
-              <div className="stats-charts">
-                <StatsChart title="Profit over time" points={trends.profit} />
-              </div>
+              <details className="model-details">
+                <summary>Decision stats · Bot model</summary>
+                <p>{current.decisions} decisions reviewed.</p>
+                {current.modelRating && (
+                  <>
+                    <p>
+                      Bot model agreement:{" "}
+                      <strong>
+                        {current.modelRating.score === null
+                          ? current.modelRating.inconclusiveDecisions > 0
+                            ? "Inconclusive"
+                            : "Not rated"
+                          : `${current.modelRating.score.toFixed(1)} / 100`}
+                      </strong>
+                      .
+                    </p>
+                    <p className="quiet model-rating-coverage">
+                      Model agreement averages{" "}
+                      {current.modelRating.ratedDecisions} rated decisions.{" "}
+                      {current.modelRating.inconclusiveDecisions} inconclusive
+                      and {current.modelRating.unavailableDecisions} unrated
+                      decisions are excluded. This uses information available at
+                      each move, not the hand’s result, and measures agreement
+                      with the bot model rather than general strategy.
+                    </p>
+                  </>
+                )}
+              </details>
+              <details className="model-details profit-chart-details">
+                <summary>Profit chart</summary>
+                <div className="stats-charts">
+                  <StatsChart title="Profit over time" points={trends.profit} />
+                </div>
+              </details>
               <details className="score-explainer">
                 <summary>About the estimates</summary>
                 <p>

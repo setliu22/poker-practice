@@ -30,10 +30,10 @@ async function api<T>(path: string, options?: RequestInit): Promise<T> {
 }
 const descriptions: Record<Mode, string> = {
   "who-wins": "Find the best five cards.",
-  "what-beats-me": "Compare legal opponent hands.",
-  "pot-odds": "Calculate the equity needed to call.",
-  equity: "Estimate equity against an exact range.",
-  decision: "Compare actions under stated assumptions.",
+  "what-beats-me": "Which hands beat yours?",
+  "pot-odds": "How much of the pot must you win to call?",
+  equity: "Estimate your share of the pot.",
+  decision: "Choose your next move.",
 };
 function App() {
   const [page, setPage] = useState<
@@ -64,9 +64,6 @@ function App() {
             </button>
           ))}
         </nav>
-        <span className="local-label">
-          <span aria-hidden="true">●</span> Local learner
-        </span>
       </header>
       <main id="main">
         {page === "Learn" ? (
@@ -265,7 +262,7 @@ function Practice() {
               </select>
               <p className="quiet">
                 {showdownStyle === "balanced"
-                  ? "Each winning hand category is selected equally often, including quads and straight flushes. These are practice frequencies, not natural deal odds."
+                  ? "Practice each hand type equally. Rare hands appear more often."
                   : "Natural random deals from the full deck."}
               </p>
             </div>
@@ -301,15 +298,7 @@ function Practice() {
                     {exercise.board?.length === 4 ? "Turn" : "River"} · Heads-up
                   </span>
                 </div>
-                {exercise.selection && (
-                  <p className="selection-note">{exercise.selection}</p>
-                )}
                 <h2>{exercise.question}</h2>
-                {exercise.objective && (
-                  <p className="objective">
-                    Learning objective: {exercise.objective}
-                  </p>
-                )}
                 {exercise.context && (
                   <div className="context">
                     {exercise.context.map((c) => (
@@ -359,7 +348,7 @@ function Practice() {
                 )}
                 {exercise.assumptions && (
                   <div className="assumptions">
-                    <h3>Stated assumptions</h3>
+                    <h3>For this hand</h3>
                     {exercise.assumptions.map((a) => (
                       <p key={a}>{a}</p>
                     ))}
@@ -367,15 +356,12 @@ function Practice() {
                 )}
                 {exercise.mode === "equity" && (
                   <div className="range">
-                    <h3>Opponent’s exact range · equal weights</h3>
+                    <h3>Possible opponent hands · equally likely</h3>
                     <div className="range-cards">
                       {exercise.range!.map((r) => (
                         <Cards key={r.join("")} cards={r} small />
                       ))}
                     </div>
-                    <p className="quiet">
-                      These combinations define this exercise’s range.
-                    </p>
                   </div>
                 )}
                 <form onSubmit={submit}>
@@ -502,10 +488,10 @@ function Practice() {
                   >
                     <p className="eyebrow">
                       {feedback.kind === "illustrative"
-                        ? "ILLUSTRATIVE STRATEGY"
+                        ? "PRACTICE GUIDE"
                         : feedback.kind === "estimate"
-                          ? "EXACT EQUITY · ESTIMATION FEEDBACK"
-                          : "CALCULATED RESULT"}
+                          ? "YOUR ESTIMATE"
+                          : "RESULT"}
                     </p>
                     <h3>
                       {feedback.correct === undefined
@@ -520,8 +506,8 @@ function Practice() {
                         <div>
                           <small>
                             {exercise.mode === "pot-odds"
-                              ? "Required equity"
-                              : "Exact equity"}
+                              ? "Needed to call"
+                              : "Pot share for these hands"}
                           </small>
                           <strong>{feedback.equity.toFixed(2)}%</strong>
                         </div>
@@ -542,7 +528,10 @@ function Practice() {
                       {feedback.explanation}
                     </p>
                     {feedback.calculation && (
-                      <p className="calculation">{feedback.calculation}</p>
+                      <details>
+                        <summary>Show the calculation</summary>
+                        <p className="calculation">{feedback.calculation}</p>
+                      </details>
                     )}
                     {feedback.hands && (
                       <div
@@ -580,38 +569,40 @@ function Practice() {
                     {exercise.mode === "who-wins" &&
                       feedback.hands?.some((h) => h.decisiveCards?.length) && (
                         <p className="quiet">
-                          Outlined cards show the deciding rank or kicker when
-                          both players have the same hand category.
+                          Outlined cards decide the result.
                         </p>
                       )}
                     {feedback.rangeResults && (
-                      <div className="table-scroll">
-                        <table>
-                          <caption>
-                            Results against each opponent combination
-                          </caption>
-                          <thead>
-                            <tr>
-                              <th scope="col">Hand</th>
-                              <th scope="col">Your equity</th>
-                              <th scope="col">Win / tie / rivers</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {feedback.rangeResults.map((r) => (
-                              <tr key={r.combo.join("")}>
-                                <td>
-                                  <Cards cards={r.combo} small />
-                                </td>
-                                <td>{r.equity.toFixed(2)}%</td>
-                                <td>
-                                  {r.wins} / {r.ties} / {r.total}
-                                </td>
+                      <details>
+                        <summary>Results for each hand</summary>
+                        <div className="table-scroll">
+                          <table>
+                            <caption>
+                              Results against each opponent combination
+                            </caption>
+                            <thead>
+                              <tr>
+                                <th scope="col">Hand</th>
+                                <th scope="col">Your equity</th>
+                                <th scope="col">Win / tie / rivers</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                            </thead>
+                            <tbody>
+                              {feedback.rangeResults.map((r) => (
+                                <tr key={r.combo.join("")}>
+                                  <td>
+                                    <Cards cards={r.combo} small />
+                                  </td>
+                                  <td>{r.equity.toFixed(2)}%</td>
+                                  <td>
+                                    {r.wins} / {r.ties} / {r.total}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </details>
                     )}
                     {feedback.stronger && (
                       <details>
@@ -624,28 +615,28 @@ function Practice() {
                             : "No stronger hand is possible."}
                         </p>
                         <p>
-                          Derived by checking all legal opponent combinations. A
-                          stronger hand in the same category may have better
-                          kickers. Possible does not mean likely; a uniform
-                          random hand is not a betting range.
+                          Possible does not mean likely. Better kickers can also
+                          win within the same hand type.
                         </p>
                       </details>
                     )}
-                    <div className="takeaway">
-                      <strong>Takeaway</strong>
-                      <p>{feedback.takeaway}</p>
-                    </div>
                     <button className="primary" onClick={() => void next()}>
                       Next exercise <span aria-hidden="true">→</span>
                     </button>
                   </section>
                 )}
-                {exercise.provenance && (
+                {(exercise.provenance ||
+                  exercise.selection ||
+                  exercise.objective) && (
                   <details className="provenance">
                     <summary>About this scenario</summary>
-                    <p>
-                      {exercise.provenance}. {exercise.limitations}
-                    </p>
+                    {exercise.objective && <p>{exercise.objective}</p>}
+                    {exercise.selection && <p>{exercise.selection}</p>}
+                    {exercise.provenance && (
+                      <p>
+                        {exercise.provenance}. {exercise.limitations}
+                      </p>
+                    )}
                   </details>
                 )}
               </>
@@ -715,7 +706,6 @@ function Progress() {
       ) : (
         <>
           <CashProgressSummary refresh={data} />
-          <LearningProgressSummary refresh={data} />
           <section className="progress-summary">
             <div>
               <p className="eyebrow">EXERCISES COMPLETED</p>
@@ -723,10 +713,7 @@ function Progress() {
             </div>
             <div>
               <h2>Skills needing practice</h2>
-              <p className="quiet">
-                Last 100 attempts. Equity estimates over 5 percentage points
-                count as a miss.
-              </p>
+              <p className="quiet">Based on your last 100 answers.</p>
               {data.skills.filter((s) => s.mistakes > 0).length ? (
                 <ul className="skill-list">
                   {data.skills
@@ -746,111 +733,105 @@ function Progress() {
               )}
             </div>
           </section>
-          <div className="progress-columns">
-            <section className="panel">
-              <h2>Answer accuracy</h2>
-              <p className="quiet">
-                Decision accuracy means a supported choice under the given
-                assumptions.
-              </p>
-              {data.categorical.map((m) => (
-                <div className="metric" key={m.mode}>
-                  <div>
-                    <strong>{modeLabels[m.mode]}</strong>
-                    <span>
-                      {m.attempts ? `${m.accuracy.toFixed(0)}%` : "—"}
-                    </span>
+          <details className="panel practice-stats">
+            <summary>Detailed practice stats</summary>
+            <LearningProgressSummary refresh={data} />
+            <div className="progress-columns">
+              <section className="panel">
+                <h2>Answer accuracy</h2>
+                <p className="quiet">Correct for the practice situation.</p>
+                {data.categorical.map((m) => (
+                  <div className="metric" key={m.mode}>
+                    <div>
+                      <strong>{modeLabels[m.mode]}</strong>
+                      <span>
+                        {m.attempts ? `${m.accuracy.toFixed(0)}%` : "—"}
+                      </span>
+                    </div>
+                    <progress
+                      aria-label={`${modeLabels[m.mode]} accuracy`}
+                      max="100"
+                      value={m.accuracy}
+                    />
+                    <small>{m.attempts} attempts</small>
                   </div>
-                  <progress
-                    aria-label={`${modeLabels[m.mode]} accuracy`}
-                    max="100"
-                    value={m.accuracy}
-                  />
-                  <small>{m.attempts} attempts</small>
-                </div>
-              ))}
-            </section>
-            <section className="panel">
-              <h2>Estimation error</h2>
-              <p className="quiet">
-                Average absolute error in percentage points. Lower means closer.
-              </p>
-              {data.numeric.map((m) => (
-                <div className="metric" key={m.mode}>
-                  <div>
-                    <strong>{modeLabels[m.mode]}</strong>
-                    <span>
-                      {m.attempts ? `${m.averageError.toFixed(2)} pp` : "—"}
-                    </span>
+                ))}
+              </section>
+              <section className="panel">
+                <h2>Estimation error</h2>
+                <p className="quiet">
+                  Lower means a closer estimate. "pp" means percentage points.
+                </p>
+                {data.numeric.map((m) => (
+                  <div className="metric" key={m.mode}>
+                    <div>
+                      <strong>{modeLabels[m.mode]}</strong>
+                      <span>
+                        {m.attempts ? `${m.averageError.toFixed(2)} pp` : "—"}
+                      </span>
+                    </div>
+                    <small>
+                      {m.attempts} attempts
+                      {m.mode === "pot-odds"
+                        ? " · answers within 0.5 pp are accepted"
+                        : ""}
+                    </small>
                   </div>
-                  <small>
-                    {m.attempts} attempts
-                    {m.mode === "pot-odds"
-                      ? " · answers within 0.5 pp are accepted"
-                      : ""}
-                  </small>
-                </div>
-              ))}
-            </section>
-          </div>
-          <section className="panel recent">
-            <h2>Recent practice</h2>
-            {data.recent.length ? (
-              <div className="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th scope="col">Exercise</th>
-                      <th scope="col">Result</th>
-                      <th scope="col">When</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.recent.map((a) => (
-                      <tr key={a.id}>
-                        <td>
-                          {modeLabels[a.mode]}
-                          <small>{a.tags.join(" · ")}</small>
-                        </td>
-                        <td>
-                          {a.feedback.kind === "estimate"
-                            ? `${a.feedback.error?.toFixed(2)} pp error`
-                            : a.feedback.correct
-                              ? "Supported / correct"
-                              : "Review needed"}
-                        </td>
-                        <td>
-                          {new Date(a.date).toLocaleString()}
-                          <small>
-                            {Math.round(a.timeMs / 1000)} seconds · for context
-                            only
-                          </small>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p>Your completed exercises will appear here.</p>
-            )}
-            <h3>
-              Recent sessions{" "}
-              <span className="quiet">(grouped by UTC day)</span>
-            </h3>
-            <div className="session-list">
-              {data.sessions.map((s) => (
-                <span key={s.date}>
-                  {s.date} · {s.attempts} attempts
-                </span>
-              ))}
+                ))}
+              </section>
             </div>
-          </section>
+            <section className="panel recent">
+              <h2>Recent practice</h2>
+              {data.recent.length ? (
+                <div className="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th scope="col">Exercise</th>
+                        <th scope="col">Result</th>
+                        <th scope="col">When</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.recent.map((a) => (
+                        <tr key={a.id}>
+                          <td>
+                            {modeLabels[a.mode]}
+                            <small>{a.tags.join(" · ")}</small>
+                          </td>
+                          <td>
+                            {a.feedback.kind === "estimate"
+                              ? `${a.feedback.error?.toFixed(2)} pp error`
+                              : a.feedback.correct
+                                ? "Supported / correct"
+                                : "Review needed"}
+                          </td>
+                          <td>
+                            {new Date(a.date).toLocaleString()}
+                            <small>{Math.round(a.timeMs / 1000)} seconds</small>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p>Your completed exercises will appear here.</p>
+              )}
+              <h3>Recent sessions</h3>
+              <div className="session-list">
+                {data.sessions.map((s) => (
+                  <span key={s.date}>
+                    {s.date} · {s.attempts} attempts
+                  </span>
+                ))}
+              </div>
+            </section>
+          </details>
           <div className="clear-row">
-            <p>Your progress stays in the local SQLite database.</p>
+            <p>Saved on this device.</p>
             <button
               className="secondary"
-              disabled={!data.total}
               onClick={() => dialog.current?.showModal()}
             >
               Clear progress
@@ -861,8 +842,7 @@ function Progress() {
       <dialog ref={dialog}>
         <h2>Clear your progress?</h2>
         <p>
-          This permanently removes all local attempts and exercises. Export JSON
-          first if you want a copy.
+          This deletes your practice history. Export it first to keep a copy.
         </p>
         <div className="dialog-actions">
           <button
@@ -926,6 +906,27 @@ const reference = [
     "Who wins, hand comparisons, pot odds and equity use deterministic server-side calculations. Decision examples marked Calculated result define probabilities, responses and payouts. Illustrative strategy is an authored teaching recommendation under simplified assumptions; multiple answers can be supported. These are original educational examples, not solver output, GTO claims, or expert-approved advice.",
   ],
 ];
+const referenceSummaries: Record<string, string> = {
+  "Preflop opening charts":
+    "A practice guide for whether to raise or fold when nobody has entered the pot. 's' means suited; 'o' means offsuit.",
+  "Hand rankings":
+    "Strongest to weakest: straight flush, four of a kind, full house, flush, straight, three of a kind, two pair, one pair, high card. Use your best five cards.",
+  "Kickers and ties":
+    "If the main hand is tied, compare the remaining cards, highest first. Identical best five cards split the pot; suits do not break ties.",
+  "Range versus exact hand":
+    "A range is the set of hands an opponent could have. Possible does not mean equally likely.",
+  "Value bets and bluffs":
+    "Bet for value when weaker hands can call. Bluff when better hands can fold.",
+  "Pot odds":
+    "For a simple closing call, divide the call cost by the final pot to find your required pot share. A $50 call into a $150 pot needs 25%, before rake.",
+  Equity:
+    "Your expected share of the pot against an opponent's hand or range, including split pots.",
+  Outs: "Unseen cards that help your hand. Improving your hand does not always mean winning.",
+  "Rule of 2 and 4":
+    "Outs × 2 estimates improvement on the next card. Outs × 4 estimates improvement across flop-to-river if you see both cards.",
+  "How feedback works":
+    "Math answers use the stated cards and ranges. Strategy guides are practice examples, not proof of the best play.",
+};
 function Reference() {
   const [query, setQuery] = useState("");
   const items = reference.filter((r) =>
@@ -952,13 +953,20 @@ function Reference() {
         {items.map(([title, text]) => (
           <section className="panel" key={title}>
             <h2>{title}</h2>
-            <p>{text}</p>
+            <p>{referenceSummaries[title]}</p>
+            <details>
+              <summary>More details</summary>
+              <p>{text}</p>
+            </details>
           </section>
         ))}
       </div>
       {(query.trim() === "" ||
         /preflop|opening|chart|starting|range/i.test(query)) && (
-        <OpeningChartLibrary />
+        <details className="panel" open={query.trim() !== ""}>
+          <summary>Opening charts</summary>
+          <OpeningChartLibrary />
+        </details>
       )}
       {!items.length && <p>No concepts match this search.</p>}
     </>

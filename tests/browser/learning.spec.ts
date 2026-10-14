@@ -21,6 +21,10 @@ test("lesson teaches reasoning, changes assumptions, saves progress and fits mob
   await expect(
     page.getByRole("button", { name: "Check my reasoning" }),
   ).toBeDisabled();
+  await expect(
+    page.getByText("Each combination is equally likely.", { exact: false }),
+  ).toBeVisible();
+  await expect(page.locator(".learning-opponents")).toContainText("Calls 40");
   await page.screenshot({
     path: test.info().outputPath("learning-question.png"),
     fullPage: true,
@@ -31,7 +35,21 @@ test("lesson teaches reasoning, changes assumptions, saves progress and fits mob
   await page.getByRole("radio", { name: /Get calls from weaker/ }).check();
   await page.getByRole("button", { name: "Check my reasoning" }).click();
   const feedback = page.getByRole("region", { name: "Lesson feedback" });
-  await expect(feedback).toContainText("80.0 chips versus 66.7");
+  await expect(feedback.locator(":scope > p")).toContainText([
+    "Decision: Correct",
+    "80.0 chips versus 66.7",
+    "weaker calling hands",
+  ]);
+  const primary = await feedback.locator(":scope > p").allTextContents();
+  expect(primary.join(" ").trim().split(/\s+/).length).toBeLessThanOrEqual(60);
+  const calculation = feedback.locator("details");
+  await expect(calculation).not.toHaveAttribute("open", "");
+  await expect(calculation.locator("table")).not.toBeVisible();
+  await calculation.locator("summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(calculation.locator("table")).toBeVisible();
+  await expect(calculation).toContainText("1/3");
+  await calculation.locator("summary").click();
   await page.getByRole("button", { name: "Next situation" }).click();
   await expect(
     page.getByRole("heading", { name: "Same cards, different calls" }),
@@ -78,6 +96,11 @@ test("lesson teaches reasoning, changes assumptions, saves progress and fits mob
     page.getByRole("heading", { name: "Same cards, different calls" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Progress", exact: true }).click();
+  await expect(
+    page.getByText("Decisions correct: 8/8 · Reasons correct: 7/8"),
+  ).not.toBeVisible();
+  await page.getByText("Detailed practice stats", { exact: true }).focus();
+  await page.keyboard.press("Enter");
   await expect(
     page.getByText("Decisions correct: 8/8 · Reasons correct: 7/8"),
   ).toBeVisible();

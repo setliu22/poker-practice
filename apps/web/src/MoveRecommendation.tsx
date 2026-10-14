@@ -70,9 +70,6 @@ export function MoveRecommendation({
         <button className="secondary" onClick={() => setRequested(true)}>
           Show move hint
         </button>
-        <p className="quiet">
-          Choose your move first, or request a bot-model suggestion.
-        </p>
       </div>
     );
   return (
@@ -105,16 +102,13 @@ export function MoveRecommendation({
                 : "Suggested move"}
               : {advice.label}
             </strong>
-            <span className="pill">Bot-model estimate</span>
+            <span className="pill">Bot estimate</span>
           </p>
-          <p className="quiet">
-            Highest estimated return among tested choices:{" "}
-            {advice.chips >= 0 ? "+" : ""}
-            {advice.chips.toFixed(1)} chips.
-            {advice.status === "close"
-              ? " Other choices are too close to call confidently."
-              : ""}
-          </p>
+          {advice.status === "close" && (
+            <p className="quiet">
+              The tested choices are too close to call confidently.
+            </p>
+          )}
           {advice.action === "raise" && advice.amount !== undefined && (
             <button
               className="secondary recommended-action"
@@ -125,6 +119,11 @@ export function MoveRecommendation({
           )}
           <details>
             <summary>Why this suggestion?</summary>
+            <p>
+              Highest estimated return among tested choices:{" "}
+              {advice.chips >= 0 ? "+" : ""}
+              {advice.chips.toFixed(1)} chips.
+            </p>
             <p>{advice.explanation}</p>
             {result.values?.find((v) => v.key === advice.key)?.sources && (
               <ul>

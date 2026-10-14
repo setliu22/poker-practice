@@ -21,7 +21,7 @@ function randomSeed() {
   return crypto.getRandomValues(new Uint32Array(1))[0];
 }
 const sizingExplanation =
-  "Deciding whether to open uses the hand and position. Choosing the size is a separate decision: this app illustrates 25 chips (2.5 BB) for every hand in the opening range. Hand strength does not set that size. Real position, stacks, rake and opponent responses affect the choice; this chart does not prove an optimal size.";
+  "Hand strength does not set this practice size. Position, stacks, rake and opponents can change a real opening size; this chart does not prove an optimal size.";
 export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
   const [charts, setCharts] = useState<OpeningChart[]>([]),
     [error, setError] = useState(""),
@@ -44,7 +44,7 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
     setCharts([]);
     void fetch("/api/preflop-charts", { signal: controller.signal })
       .then(async (r) => {
-        if (!r.ok) throw new Error("Opening baselines could not load.");
+        if (!r.ok) throw new Error("Opening guide could not load.");
         return (await r.json()) as OpeningChart[];
       })
       .then((data) => {
@@ -54,9 +54,7 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
               .slice(0, -2)
               .every((position) => walkthroughChart(data, position, count))
           )
-            throw new Error(
-              `The ${count}-player opening baseline is incomplete.`,
-            );
+            throw new Error(`The ${count}-player opening guide is incomplete.`);
         }
         if (!controller.signal.aborted) setCharts(data);
       })
@@ -164,18 +162,18 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
   const minimumRaiseTo = context?.raised.minimumRaiseTo ?? 40;
   const feedbackText =
     step === 0
-      ? `Everyone before the button folded. Only the blinds remain in the pot, so this is an unopened pot. The original table still has ${players} seats: use the ${players}-player button baseline.`
+      ? `Only the blinds are in, so the pot is unopened. Keep using the ${players}-player guide even after others fold.`
       : step === 1
-        ? `${hand} is ${expected === "raise" ? "inside" : "outside"} the ${players}-player Button opening baseline. ${expected === "raise" ? "Raise to 25" : "Fold"} agrees with this authored baseline. Raise to 25 means a total bet of 25 chips, not an extra 25 on top of another bet. Opening can win the blinds or build a pot in position; the button acts last after the flop if still in the hand. The two blinds can still fold, call or re-raise.`
+        ? `${hand} is ${expected === "raise" ? "inside" : "outside"} the ${players}-player Button opening guide: ${expected === "raise" ? "raise to 25" : "fold"}. The button acts last after the flop, which helps you decide with more information.`
         : step === 2
-          ? `The same ${hand} is outside this baseline's ${position} opening range. ${players - hero - 1} players still have a decision after you. Folding agrees with this authored baseline; it is not proof that every real game requires a fold.`
+          ? `${hand} is outside the guide's ${position} opening range: fold. With ${players - hero - 1} players still to act, early position opens fewer hands.`
           : step === 3
-            ? `${hand} enters this baseline's Button opening range. The hand did not become stronger: only two opponents, the blinds, are left to act. This baseline opens more hands later. You still need a plan if they call or raise.`
+            ? `${hand} enters the Button opening range: raise to 25. The hand did not become stronger; only the two blinds are left to act.`
             : step === 4
-              ? `You have posted 0, so matching the cutoff's total ${raiseTo} costs ${raiseTo} chips. The cutoff entered voluntarily with a raise: this is a response to an opening range, not a first-in opening decision. The opening chart does not choose your response here. This is betting arithmetic, not strategy.`
+              ? `You have posted 0, so matching the cutoff's total ${raiseTo} costs ${raiseTo} chips. This opening guide cannot choose your response to a raise.`
               : step === 5
-                ? `The cutoff increased the bet from 10 to ${raiseTo}: a ${raiseTo - 10}-chip raise. The minimum full re-raise adds at least another ${raiseTo - 10}, making your total ${minimumRaiseTo}. You may fold, call ${raiseTo}, or raise to ${minimumRaiseTo} or more. Which is best depends on the raiser's range, price and the blinds still behind you. This is betting arithmetic, not a strategy recommendation.`
-                : `${fresh?.hand} is ${fresh?.action === "raise" ? "inside" : "outside"} the ${players}-player ${position} opening baseline. ${fresh?.action === "raise" ? "Raise to 25" : "Fold"} agrees with this baseline in the supplied unopened situation. This comparison is practice using a reference, not a poker skill score.`;
+                ? `The raise from 10 to ${raiseTo} is a ${raiseTo - 10}-chip increase; add at least ${raiseTo - 10} again, making your total ${minimumRaiseTo}. That is the legal minimum, not a strategy recommendation.`
+                : `${fresh?.hand} is ${fresh?.action === "raise" ? "inside" : "outside"} the ${players}-player ${position} opening guide: ${fresh?.action === "raise" ? "raise to 25" : "fold"}. This is guide practice, not a poker skill score.`;
   const choiceValues =
     step === 0
       ? [
@@ -208,6 +206,7 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
             {players} players · 1,000-chip stacks · Blinds 5/10 · No antes or
             rake
           </p>
+          <p className="quiet">Practice guide; real games can differ.</p>
         </div>
       </div>
       <div className="button-row walkthrough-settings">
@@ -250,7 +249,7 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
           <button onClick={() => setReload((n) => n + 1)}>Retry loading</button>
         </section>
       ) : !context || !chart ? (
-        <p role="status">Loading the opening baseline…</p>
+        <p role="status">Loading the opening guide…</p>
       ) : (
         <section className="panel walkthrough-scene">
           <div
@@ -327,10 +326,7 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
             </h2>
             {step === 0 && folds < button ? (
               <>
-                <p>
-                  Follow the public action in order. The dealer button marks the
-                  last non-blind seat to act before the flop.
-                </p>
+                <p>Watch each player act before the button.</p>
                 <button
                   className="primary"
                   onClick={() => setFolds((n) => n + 1)}
@@ -342,28 +338,28 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
               <>
                 <p>
                   {step === 0
-                    ? `${button} folds reach you. Is this an unopened pot or a pot facing a raise?`
+                    ? "Everyone before you folded. Is the pot unopened or raised?"
                     : step === 1
-                      ? "Everyone before you folded, and you have not posted a blind. Use the hand and position to choose its action in the reference baseline."
+                      ? "Everyone before you folded. Choose an opening action using the practice guide."
                       : step === 2
-                        ? "Try this hand from earlier position. Choose its action in the reference baseline; an optional hint is available."
+                        ? "Choose this hand's action from earlier position."
                         : step === 3
-                          ? "Everyone before the button folds. Does the baseline now include the exact same hand?"
+                          ? "Same hand, later position. Would you open now?"
                           : step === 4
-                            ? `Everyone before the cutoff folded; cutoff raised to ${raiseTo}. You are on the button with ${hand} and have paid 0 this street. How many new chips would calling cost?`
+                            ? `Cutoff raised to ${raiseTo}; you have paid 0 this street. How many chips would calling cost?`
                             : step === 5
                               ? `Blinds are 5/10; the cutoff raised to ${raiseTo}. What is the minimum legal full re-raise total from the button?`
-                              : "Everyone before you folded. Use position and the reference baseline to choose an opening action."}
+                              : "Everyone before you folded. Choose an opening action using the practice guide."}
                 </p>
                 {[1, 2, 3, 6].includes(step) && (
                   <details>
-                    <summary>Show the baseline for this hand</summary>
+                    <summary>Show the guide for this hand</summary>
                     <p>
                       {hand}:{" "}
                       {baselineAction(chart, hand) === "raise"
                         ? "raise to 25"
                         : "fold"}{" "}
-                      in the {players}-player {position} authored opening range.{" "}
+                      in the {players}-player {position} practice range.{" "}
                       {players - hero - 1} players are still to act.
                     </p>
                   </details>
@@ -383,7 +379,7 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
                             ? "Re-raise total"
                             : step === 0
                               ? "Pot situation"
-                              : "Action in this illustrative baseline"}
+                              : "Opening action"}
                       </legend>
                       <div className="learning-choices">
                         {choiceValues.map((choice) => (
@@ -413,13 +409,25 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
                       {agrees
                         ? raised || step === 0
                           ? "That matches the situation"
-                          : "That follows the baseline"
+                          : "That follows the guide"
                         : raised || step === 0
                           ? "Recheck the situation"
-                          : "Compare with the baseline"}
+                          : "Compare with the guide"}
                     </h3>
                     <p>{feedbackText}</p>
-                    {[1, 3, 6].includes(step) && <p>{sizingExplanation}</p>}
+                    {[1, 3, 6].includes(step) && (
+                      <>
+                        <p className="quiet">
+                          Practice size: 25 chips total (2.5 BB) for every hand
+                          in the opening range.
+                        </p>
+                        <details>
+                          <summary>Opening size details</summary>
+                          <p>{sizingExplanation}</p>
+                          <p>Raise to 25 means 25 total, not an extra 25.</p>
+                        </details>
+                      </>
+                    )}
                     {raised && (
                       <div className="button-row">
                         <span>Fold · pay 0</span>
@@ -462,7 +470,7 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
         </section>
       )}
       <details className="panel">
-        <summary>About this opening baseline</summary>
+        <summary>Guide source and limits</summary>
         <p>
           Raise/fold guidance from{" "}
           {chart ? (
@@ -470,20 +478,17 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
           ) : (
             "PreflopR's authored opening ranges"
           )}
-          , not a solver or a guarantee of the best move. Source stack depth,
-          rake and sizing are unspecified; 100 big blinds, no rake and raise-to
-          2.5 BB are this app's teaching assumptions. Only unopened first
-          actions use the chart. No chart agreement is recorded as a skill
-          grade.
+          . This authored chart is not a solver or a guarantee of the best move.
+          It covers unopened pots only; agreement is not a skill grade.
         </p>
-        <p>{sizingExplanation}</p>
+        <p>
+          Source stacks, rake and sizing are unspecified. This practice assumes
+          100 big blinds, no rake and 2.5 BB for the whole opening range.
+        </p>
       </details>
       <details className="panel">
         <summary>More practice and earlier lessons</summary>
-        <p>
-          Optional river value-betting and all-in exercises. Your previous
-          history is preserved.
-        </p>
+        <p>River betting and all-in decisions.</p>
         <button className="secondary" onClick={onLibrary}>
           Open earlier exercises
         </button>

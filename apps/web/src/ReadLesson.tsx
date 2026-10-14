@@ -100,25 +100,19 @@ export function ReadLesson({ onBack }: { onBack: () => void }) {
       <details className="panel">
         <summary>How to decide</summary>
         <p>
-          Calling an all-in buys every remaining card. Compare your expected
-          share of the final pot (including half of ties) with the price: chips
-          to call ÷ final pot. Folding costs zero additional chips.
+          Compare your share of the final pot with the call price: chips to call
+          ÷ final pot. Ties count as half a pot; folding costs no more chips.
         </p>
         <p>
-          Start with the supplied opponent range. Improving your hand is useful
-          only when the final hand beats that range. Use the matchup guide when
-          counting outs is misleading. These exercises supply narrow ranges so
-          the assumptions can be checked; they do not predict real opponents.
+          Use the supplied possible hands and weights. They are practice
+          assumptions, not predictions of real opponents.
         </p>
       </details>
       {error && <p role="alert">{error}</p>}
       {!q ? (
         <section className="panel">
           <p>
-            Practice dominated draws, overcards, straight draws and redraws.
-            Each situation asks for a decision, then changes the call price.
-            Each new attempt generates fresh legal cards and supplied ranges.
-            Recent mistakes make the corresponding skill more likely to appear.
+            Decide whether to call, then try the same hand at a different price.
           </p>
           <button
             className="primary"
@@ -141,9 +135,9 @@ export function ReadLesson({ onBack }: { onBack: () => void }) {
             </div>
           </div>
           <p>
-            Pot before the shove: <strong>{q.potBefore}</strong>. Opponent
-            shoves <strong>{q.bet}</strong>. You can call {q.bet} or fold.
-            Calling leaves no further bets.
+            Pot before the shove: <strong>{q.potBefore} chips</strong>. Opponent
+            shoves <strong>{q.bet}</strong>; call {q.bet} or fold, with no
+            further bets.
           </p>
           <h3>Supplied range after the shove</h3>
           <div className="learning-opponents">
@@ -154,13 +148,16 @@ export function ReadLesson({ onBack }: { onBack: () => void }) {
               </div>
             ))}
           </div>
-          <p>{q.coaching}</p>
-          {q.selectionReason && <p className="quiet">{q.selectionReason}</p>}
+          <details>
+            <summary>Hand hint</summary>
+            <p>{q.coaching}</p>
+            {q.selectionReason && <p className="quiet">{q.selectionReason}</p>}
+          </details>
           <details>
             <summary>Help estimate: exact matchup shares</summary>
             <p>
-              Multiply each share by its range weight, then add. These shares
-              count every legal turn–river pair, including ties and redraws.
+              Multiply each share by its weight, then add. All legal turn–river
+              pairs, ties and redraws are included.
             </p>
             {q.guide?.map((row) => (
               <div className="learning-opponent" key={row.cards.join("")}>
@@ -173,7 +170,7 @@ export function ReadLesson({ onBack }: { onBack: () => void }) {
             ))}
             <p>
               Weighted share: <strong>{equity.toFixed(1)}%</strong>. For this
-              exercise you may use that share directly to focus on the decision.
+              exercise, you can use it for your decision.
             </p>
           </details>
           <details>
@@ -204,10 +201,13 @@ export function ReadLesson({ onBack }: { onBack: () => void }) {
                   disabled={busy}
                 />
               </label>
-              <p className="quiet">
-                Final pot = {q.potBefore} + {q.bet} + your {q.bet} call. Divide
-                the call cost by that final pot.
-              </p>
+              <details>
+                <summary>Call price help</summary>
+                <p>
+                  Final pot = {q.potBefore} + {q.bet} + your {q.bet} call.
+                  Divide the call cost by that final pot.
+                </p>
+              </details>
               <label>
                 Your equity estimate (%) · optional
                 <input
@@ -241,10 +241,8 @@ export function ReadLesson({ onBack }: { onBack: () => void }) {
                   What changes?
                 </legend>
                 <p>
-                  This controlled comparison keeps the range and {q.potBefore}
-                  -chip starting pot fixed. Both players have enough chips to
-                  match the new all-in amount. In real play, a different bet
-                  size can also change the range.
+                  Keep the same range and {q.potBefore}-chip starting pot; only
+                  the price changes. Both players can match the new all-in.
                 </p>
                 {["call", "fold"].map((a) => (
                   <label key={a}>
@@ -288,47 +286,38 @@ export function ReadLesson({ onBack }: { onBack: () => void }) {
               </p>
               <p>
                 Your share is <strong>{feedback.equity?.toFixed(1)}%</strong>;
-                the first call needs{" "}
-                <strong>{feedback.required?.toFixed(1)}%</strong>. Calling
-                averages {feedback.callEv?.toFixed(1)} additional chips; folding
-                averages 0.
+                calling {q.bet} needs{" "}
+                <strong>{feedback.required?.toFixed(1)}%</strong> under this
+                range.
               </p>
               <p>
-                At {q.counterBet}, the required share is{" "}
+                At {q.counterBet}, you need{" "}
                 {feedback.counterRequired?.toFixed(1)}%.{" "}
                 {feedback.counterEv! > 0 ? "Calling" : "Folding"} earns more;
-                call EV is {feedback.counterEv?.toFixed(1)} chips. Your hand's
-                equity stays the same when only the price changes.
-              </p>
-              <p>
-                Call-price estimate error: {feedback.priceError?.toFixed(1)}{" "}
-                percentage points.
-                {feedback.errorPp !== undefined &&
-                  ` Equity estimate error: ${feedback.errorPp.toFixed(1)} points.`}
-              </p>
-              <p>{q.coaching}</p>
-              <h3>Which part of the range drives your share?</h3>
-              {q.guide?.map((row) => (
-                <div className="learning-opponent" key={row.cards.join("")}>
-                  <Cards cards={row.cards} small />
-                  <span>
-                    {row.equity.toFixed(1)}% share against this hand, weighted{" "}
-                    {(row.weight * 100).toFixed(0)}%.
-                  </span>
-                </div>
-              ))}
-              <p>
-                Giving more weight to the hand with the lower matchup share
-                lowers your total equity; more weight to the higher-share hand
-                raises it. Check that change against the call price.
+                your hand's equity stays the same.
               </p>
               <details>
                 <summary>Exact calculation</summary>
+                <p>
+                  Calling averages {feedback.callEv?.toFixed(1)} additional
+                  chips; folding averages 0. At {q.counterBet}, calling averages{" "}
+                  {feedback.counterEv?.toFixed(1)} chips.
+                </p>
+                <p>
+                  Call-price estimate error: {feedback.priceError?.toFixed(1)}{" "}
+                  percentage points.
+                  {feedback.errorPp !== undefined &&
+                    ` Equity estimate error: ${feedback.errorPp.toFixed(1)} points.`}
+                </p>
                 <p>{feedback.explanation}</p>
                 <p>
                   Outright wins: {feedback.winPercent?.toFixed(1)}%; ties:{" "}
                   {feedback.tiePercent?.toFixed(1)}%. Equity includes half of
                   tied pots.
+                </p>
+                <p>
+                  Giving more weight to a lower-share hand lowers your total
+                  equity; more weight to a higher-share hand raises it.
                 </p>
               </details>
               <div className="button-row">

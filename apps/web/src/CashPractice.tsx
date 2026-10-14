@@ -132,7 +132,7 @@ export function CashProgressSummary({
   }, [refresh, players, retry]);
   return (
     <section className="panel cash-progress" aria-label="Online cash progress">
-      <h2>Online cash practice progress</h2>
+      <h2>Cash practice progress</h2>
       {error ? (
         <p role="alert">
           {error}{" "}
@@ -147,32 +147,26 @@ export function CashProgressSummary({
             <strong>
               {data.independentCorrect}/{data.independentAttempts}
             </strong>{" "}
-            complete answers correct.
+            correct for these practice ranges.
           </p>
           <p>
             Hinted first answers: {data.assistedAttempts} · Guided follow-ups:{" "}
-            {data.transferCorrect}/{data.transferAttempts} correct.
+            {data.transferCorrect}/{data.transferAttempts} correct for these
+            practice ranges.
           </p>
-          <p>
-            High-confidence independent misses: {data.highConfidenceMistakes}.
-          </p>
-          <p className="quiet">
-            A complete answer includes the action, reason and estimate under
-            supplied study assumptions. These counts measure these exercises,
-            separately from chip profit or real-world poker skill.
-          </p>
-          {!data.attempts && (
+          <details>
+            <summary>Progress details</summary>
             <p>
-              Start with a fresh decision, explain it, then check what changes
-              at a different price or range.
+              Correct means the action, reason and estimate match this practice
+              range. These counts measure exercises, not real-world poker skill.
             </p>
-          )}
-          <div className="cash-cue">
-            <strong>For your next real session</strong>
+            <p>
+              High-confidence independent misses: {data.highConfidenceMistakes}.
+            </p>
             <p>{data.nextSessionCue}</p>
-          </div>
+          </details>
           {data.attempts > 0 && (
-            <details open>
+            <details>
               <summary>What to practice next</summary>
               <ul className="cash-skill-list">
                 {[...data.skills]
@@ -230,19 +224,23 @@ function QuestionScene({ question: q }: { question: CashQuestion }) {
     <>
       <p className="cash-context">
         <strong>{q.tablePlayers}-seat cash table</strong> · {q.activePlayers}{" "}
-        players still in this pot · {q.startingStackBb} BB starting stacks
+        players still in this pot · You:{" "}
+        {q.seats.find((seat) => seat.seat === q.heroSeat)?.position}
       </p>
       <p>
-        River effective stack before wagers: {number(q.effectiveStackBb)} BB ·
         Current pot: <strong>{number(q.potBb)} BB</strong>
         {q.callBb > 0
           ? ` · Call costs ${number(q.callBb)} BB`
           : ` · Offered bet ${number(q.betBb)} BB`}{" "}
-        · Study rake: {number(q.rakeBb)} BB
+        · Fixed rake: {number(q.rakeBb)} BB
       </p>
       <p className="quiet">
-        The current pot includes visible river bets and calls. BB means big
-        blinds; the study rake is a fixed deduction, not a site fee schedule.
+        BB = big blind. Rake is a fixed practice deduction.
+      </p>
+      <p>
+        {q.callBb > 0
+          ? "Calling ends the betting."
+          : "Checking ends the hand; bets get only the shown responses."}
       </p>
       <div className="learning-cards">
         <div>
@@ -254,29 +252,36 @@ function QuestionScene({ question: q }: { question: CashQuestion }) {
           <Cards cards={q.board} />
         </div>
       </div>
-      <div className="cash-seats" aria-label="Table seats">
-        {q.seats.map((s) => (
-          <div
-            key={s.seat}
-            className={`cash-seat ${s.seat === q.heroSeat ? "cash-hero" : ""} ${s.status === "folded" ? "cash-folded" : ""}`}
-          >
-            <strong>
-              {s.position}
-              {s.seat === q.dealerSeat ? " · Button" : ""}
-            </strong>
-            <span>
-              {s.label}
-              {s.seat === q.heroSeat && s.label !== "You" ? " · You" : ""}
-            </span>
-            <span>
-              {s.status === "folded" ? "Folded" : "In this pot"} ·{" "}
-              {number(s.stackBb)} BB left
-            </span>
-          </div>
-        ))}
-      </div>
       <details>
-        <summary>Public action history</summary>
+        <summary>Table details</summary>
+        <p>
+          {q.startingStackBb} BB starting stacks · River effective stack before
+          wagers: {number(q.effectiveStackBb)} BB
+        </p>
+        <div className="cash-seats" aria-label="Table seats">
+          {q.seats.map((s) => (
+            <div
+              key={s.seat}
+              className={`cash-seat ${s.seat === q.heroSeat ? "cash-hero" : ""} ${s.status === "folded" ? "cash-folded" : ""}`}
+            >
+              <strong>
+                {s.position}
+                {s.seat === q.dealerSeat ? " · Button" : ""}
+              </strong>
+              <span>
+                {s.label}
+                {s.seat === q.heroSeat && s.label !== "You" ? " · You" : ""}
+              </span>
+              <span>
+                {s.status === "folded" ? "Folded" : "In this pot"} ·{" "}
+                {number(s.stackBb)} BB left
+              </span>
+            </div>
+          ))}
+        </div>
+      </details>
+      <details>
+        <summary>Hand history</summary>
         <ol className="cash-history">
           {q.history.map((a, i) => (
             <li key={i}>
@@ -285,14 +290,8 @@ function QuestionScene({ question: q }: { question: CashQuestion }) {
           ))}
         </ol>
       </details>
-      <h3>Supplied study ranges</h3>
-      <p className="quiet">
-        These are possible hands and study weights, not revealed opponent cards
-        or a prediction of a real player's range. Blocked joint combinations are
-        excluded in multiway calculations. Each percentage is normalized within
-        its supplied range and rounded to two decimal places; the calculation
-        uses the unrounded weights.
-      </p>
+      <h3>Opponent ranges</h3>
+      <p className="quiet">Practice ranges; real opponents vary.</p>
       <div className="cash-ranges">
         {q.ranges.map((r) => (
           <section key={r.seat} aria-label={r.label}>
@@ -301,7 +300,7 @@ function QuestionScene({ question: q }: { question: CashQuestion }) {
               <div className="cash-range-row" key={i}>
                 <Cards cards={c.cards} small />
                 <span>
-                  Study weight{" "}
+                  Weight{" "}
                   {(
                     (100 * c.weight) /
                     r.combinations.reduce((sum, combo) => sum + combo.weight, 0)
@@ -317,7 +316,13 @@ function QuestionScene({ question: q }: { question: CashQuestion }) {
         ))}
       </div>
       <details>
-        <summary>Complete study assumptions</summary>
+        <summary>Range details</summary>
+        <p>
+          Possible hands, not revealed cards. Blocked joint combinations are
+          excluded. Percentages are normalized within each range and rounded;
+          calculations use unrounded weights. The pot includes visible river
+          bets and calls.
+        </p>
         <ul>
           {q.assumptions.map((a) => (
             <li key={a}>{a}</li>
@@ -364,7 +369,7 @@ function AnswerForm({
       }}
     >
       <fieldset disabled={busy}>
-        <legend>Your action under the supplied assumptions</legend>
+        <legend>Your action</legend>
         {question.options.map((o) => (
           <label key={o.action}>
             <input
@@ -406,10 +411,10 @@ function AnswerForm({
           disabled={busy}
           onChange={(e) => setEstimate(e.target.value)}
         />
-        <span className="quiet">Percent, from 0 to 100.</span>
+        <span className="quiet">0–100%</span>
       </label>
       <fieldset disabled={busy}>
-        <legend>How confident are you in this answer?</legend>
+        <legend>Confidence</legend>
         {(
           [
             ["unsure", "Unsure"],
@@ -430,11 +435,9 @@ function AnswerForm({
         ))}
       </fieldset>
       <button className="primary" type="submit" disabled={busy || !valid}>
-        {busy ? "Saving…" : "Commit my answer"}
+        {busy ? "Saving…" : "Check answer"}
       </button>
-      <p className="quiet">
-        Your first answer is saved once. Feedback appears after you commit.
-      </p>
+      <p className="quiet">Saved once; feedback follows.</p>
     </form>
   );
 }
@@ -449,6 +452,24 @@ function Feedback({
   question: CashQuestion;
 }) {
   const focus = useRef<HTMLElement>(null);
+  const acceptedLabels = f.acceptedActions.map(
+    (action) =>
+      question.options.find((option) => option.action === action)?.label ??
+      action,
+  );
+  const betValue = f.actionValues.find((value) => value.action === "bet");
+  const checkValue = f.actionValues.find((value) => value.action === "check");
+  const numericReason =
+    question.callBb > 0 && f.sharePercent !== undefined
+      ? `Expected pot share: ${number(f.sharePercent)}% · Required share: ${number(f.expectedEstimate)}%.`
+      : question.skill === "bluff" && f.foldPercent !== undefined
+        ? `Supplied folds: ${number(f.foldPercent)}% · Required folds: ${number(f.expectedEstimate)}%.`
+        : question.skill === "value-bet" &&
+            f.weakerCallerPercent !== undefined &&
+            betValue &&
+            checkValue
+          ? `Weaker callers: ${number(f.weakerCallerPercent)}% · Average return in this example: ${number(betValue.evBb)} BB betting vs ${number(checkValue.evBb)} BB checking.`
+          : f.explanation;
   useEffect(() => {
     focus.current?.focus();
   }, []);
@@ -459,45 +480,57 @@ function Feedback({
       className="cash-feedback"
       aria-label="Cash decision feedback"
     >
-      <h3>{f.correct ? "Complete answer correct" : "Review this decision"}</h3>
+      <h3>
+        {f.correct
+          ? "Correct for this practice range"
+          : "Revisit this decision"}
+      </h3>
       <p>
         {f.phase === "transfer"
           ? "Guided follow-up"
           : f.assisted
             ? "Hinted first answer"
-            : "Independent first answer"}{" "}
-        · Confidence: {answer.confidence.replaceAll("-", " ")}.
+            : "Independent first answer"}
       </p>
       <p>
-        Your action:{" "}
-        {question.options.find((o) => o.action === answer.action)?.label}. Your
-        reason: {question.reasons.find((r) => r.id === answer.reasonId)?.label}.
-        Your estimate: {number(answer.estimatePercent)}%.
+        In this example: <strong>{acceptedLabels.join(" or ")}</strong>.
       </p>
-      <ul>
-        <li>Action: {f.actionCorrect ? "Correct" : "Needs revision"}</li>
-        <li>Reason: {f.reasonCorrect ? "Correct" : "Needs revision"}</li>
-        <li>
-          Estimate: {f.estimateCorrect ? "Within tolerance" : "Needs revision"}{" "}
-          · Reference {number(f.expectedEstimate)}% · Error{" "}
-          {number(f.estimateErrorPp)} percentage points
-        </li>
-      </ul>
-      <h4>Expected value under the supplied ranges and responses</h4>
-      <ul>
-        {f.actionValues.map((v) => (
-          <li key={v.action}>
-            {v.label}: {number(v.evBb)} BB
-          </li>
-        ))}
-      </ul>
-      <p>{f.explanation}</p>
-      <p className="cash-calculation">{f.calculation}</p>
+      <p>
+        Action: {f.actionCorrect ? "Correct" : "Revisit"} · Reason:{" "}
+        {f.reasonCorrect ? "Correct" : "Revisit"} · Estimate:{" "}
+        {f.estimateCorrect ? "Within tolerance" : "Revisit"}
+      </p>
+      <p>{numericReason}</p>
       <p>{f.takeaway}</p>
-      <p className="quiet">
-        Exact for these legal weighted river combinations and stipulated
-        responses. Real opponent ranges and responses remain uncertain.
-      </p>
+      <details>
+        <summary>Answer breakdown</summary>
+        <p>
+          Your action:{" "}
+          {question.options.find((o) => o.action === answer.action)?.label}.
+          Your reason:{" "}
+          {question.reasons.find((r) => r.id === answer.reasonId)?.label}. Your
+          estimate: {number(answer.estimatePercent)}%. Confidence:{" "}
+          {answer.confidence.replaceAll("-", " ")}.
+        </p>
+        <p>
+          Reference estimate for this practice range:{" "}
+          {number(f.expectedEstimate)}% · Error: {number(f.estimateErrorPp)}{" "}
+          percentage points
+        </p>
+      </details>
+      <details>
+        <summary>Math</summary>
+        <h4>Expected value for these practice ranges and responses</h4>
+        <ul>
+          {f.actionValues.map((v) => (
+            <li key={v.action}>
+              {v.label}: {number(v.evBb)} BB
+            </li>
+          ))}
+        </ul>
+        <p>{f.explanation}</p>
+        <p className="cash-calculation">{f.calculation}</p>
+      </details>
     </section>
   );
 }
@@ -647,23 +680,14 @@ export function CashPractice({ onBack }: { onBack: () => void }) {
       </button>
       <div className="page-heading">
         <div>
-          <span className="eyebrow">Online no-limit Hold’em cash</span>
           <h1 ref={focus} tabIndex={-1}>
             Online cash Decision Lab
           </h1>
         </div>
       </div>
-      <p>
-        Practice a river decision, explain the range and price, then test a
-        changed assumption. Use the next-session cue when reviewing your own
-        hands after play.
-      </p>
       <section className="panel cash-settings" aria-label="Next drill settings">
-        <h2>Next drill settings</h2>
-        <p className="quiet">
-          Changing these controls applies to the next fresh drill. The current
-          hand keeps its original table size.
-        </p>
+        <h2>Next hand</h2>
+        <p className="quiet">Settings apply to the next hand.</p>
         <div className="cash-settings-row">
           <label>
             Table seats
@@ -677,7 +701,7 @@ export function CashPractice({ onBack }: { onBack: () => void }) {
             >
               {[2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
                 <option key={n} value={n}>
-                  {n} seats{n === 9 ? " · full ring" : ""}
+                  {n} seats
                 </option>
               ))}
             </select>
@@ -695,7 +719,7 @@ export function CashPractice({ onBack }: { onBack: () => void }) {
                 })
               }
             >
-              <option value="auto">Adaptive mix</option>
+              <option value="auto">Mixed practice</option>
               {cashSkills
                 .filter((s) => settings.players !== 2 || s !== "multiway-call")
                 .map((s) => (
@@ -731,22 +755,17 @@ export function CashPractice({ onBack }: { onBack: () => void }) {
           aria-busy={busy}
         >
           <p className="eyebrow">
-            {phase === "initial"
-              ? "First decision"
-              : "Guided changed-assumption follow-up"}
+            {phase === "initial" ? "First decision" : "Guided follow-up"}
           </p>
           <h2>{question.title}</h2>
-          {phase === "initial" && (
-            <p className="quiet">{drill.selectionReason}</p>
-          )}
           {question.change && <p className="cash-change">{question.change}</p>}
-          {phase === "transfer" && (
-            <p className="quiet">
-              This follows revealed feedback, so it is counted separately from
-              independent first answers.
-            </p>
-          )}
           <QuestionScene question={question} />
+          {phase === "initial" && (
+            <details>
+              <summary>Why this drill?</summary>
+              <p>{drill.selectionReason}</p>
+            </details>
+          )}
           {feedback && drill.answers[phase] ? (
             <>
               <Feedback
@@ -766,7 +785,7 @@ export function CashPractice({ onBack }: { onBack: () => void }) {
                       persist(settings, drill.id, "transfer");
                     }}
                   >
-                    Try the changed assumption
+                    Try the change
                   </button>
                 )}
                 <button
@@ -796,8 +815,7 @@ export function CashPractice({ onBack }: { onBack: () => void }) {
               </div>
               {settings.players === 2 && question.skill === "multiway-call" && (
                 <p className="quiet">
-                  Choose at least three seats in the next drill settings to
-                  revisit multiway calls.
+                  Multiway calls need at least three seats.
                 </p>
               )}
             </>
@@ -805,14 +823,11 @@ export function CashPractice({ onBack }: { onBack: () => void }) {
             <>
               <button className="secondary" disabled={busy} onClick={showHint}>
                 {drill.assisted.includes(phase)
-                  ? "Show reasoning hint again"
-                  : "Use a reasoning hint"}
+                  ? "Show hint again"
+                  : "Use a hint"}
               </button>
               {drill.assisted.includes(phase) && (
-                <p className="quiet">
-                  A hint was used for this decision. This answer will be
-                  recorded as assisted.
-                </p>
+                <p className="quiet">Hint used · Counts as a hinted answer.</p>
               )}
               {hint && (
                 <p className="cash-cue" role="status">

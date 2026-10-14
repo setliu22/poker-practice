@@ -108,6 +108,7 @@ test("live opening guide is read-only, highlights your hand, and supports keyboa
     page.getByRole("heading", { name: "Hand complete", exact: true }),
   ).toBeVisible();
   await page.getByRole("button",{name:/^Review decisions/}).click();
+  await page.locator(".bot-estimate-details > summary").click();
   const review = page.getByRole("region", {
     name: "Illustrative opening guide",
   });
@@ -123,6 +124,7 @@ test("live opening guide is read-only, highlights your hand, and supports keyboa
   await page.reload();
   await page.getByRole("button", { name: "Bot table", exact: true }).click();
   await page.getByRole("button",{name:/^Review decisions/}).click();
+  await page.locator(".bot-estimate-details > summary").click();
   await expect(
     page.getByRole("region", { name: "Illustrative opening guide" }),
   ).toBeVisible();

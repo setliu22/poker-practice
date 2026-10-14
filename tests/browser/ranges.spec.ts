@@ -176,6 +176,11 @@ test("range tables explain blockers and weights, support keyboard navigation, an
   await expect(facts).toContainText("1 opponent");
   await expect(facts).toContainText("950 chips");
   await expect(facts).toContainText("100 chips");
+  const handDetails = facts.locator(".decision-observations");
+  await expect(handDetails).not.toHaveAttribute("open", "");
+  await expect(facts.locator(".move-best-five")).toBeHidden();
+  await handDetails.locator(":scope > summary").focus();
+  await page.keyboard.press("Enter");
   await expect(facts).toContainText(
     "Your four aces currently beat every legal opponent hand",
   );
@@ -234,6 +239,11 @@ test("range tables explain blockers and weights, support keyboard navigation, an
   await ranges.screenshot({ path: test.info().outputPath("range-matrix.png") });
 
   const selector = page.getByLabel("Compare bet sizes", { exact: true });
+  const estimate = page.locator(".bot-estimate-details");
+  await expect(estimate).not.toHaveAttribute("open", "");
+  await expect(selector).toBeHidden();
+  await estimate.locator(":scope > summary").focus();
+  await page.keyboard.press("Enter");
   await expect(
     page.getByRole("region", { name: "How the opponent may respond" }),
   ).toBeVisible();

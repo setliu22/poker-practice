@@ -29,6 +29,8 @@ Open **http://127.0.0.1:3001**. Run from the repository root so migrations and b
 
 ## Practice
 
+Screens show the hand, the question, and a short explanation after you answer. Open the optional details for calculations, history, statistics, or sources.
+
 Open **Learn → Online cash Decision Lab** for focused river decisions at **2–9-seat tables**, starting at nine seats. Table size and players still in the hand are displayed separately. Practice bluff catching, value betting, bluffing, and closing three-player calls using public betting histories, 100-BB starting stacks, and explicitly supplied weighted ranges. Multiway practice requires at least three seats.
 
 Choose an action, explain your reasoning, estimate a percentage, and record your confidence before seeing feedback. A hint is optional and marks the answer as assisted. Each first answer is saved once; a guided follow-up changes the range weights so you can test what changes your decision. **Fresh review** creates another situation instead of scoring the same revealed question again. Progress separates independent answers, assisted answers, and guided follow-ups, identifies action/reasoning/estimation mistakes, and suggests a cue for your next session.

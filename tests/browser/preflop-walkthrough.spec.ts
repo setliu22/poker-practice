@@ -46,6 +46,8 @@ async function answer(page: Page, label: string) {
   await page.getByLabel(label, { exact: true }).check();
   await page.getByRole("button", { name: "Reveal why" }).click();
   await expect(feedback(page)).toBeVisible();
+  const primary = await feedback(page).locator(":scope > p").allTextContents();
+  expect(primary.join(" ").trim().split(/\s+/).length).toBeLessThanOrEqual(65);
 }
 async function continueStep(page: Page) {
   await page.getByRole("button", { name: "Continue walkthrough" }).click();
@@ -62,7 +64,7 @@ async function foldsToButton(page: Page, count: 6 | 9) {
   await expect(page.locator(".hero-seat")).toContainText("Your turn");
   await answer(page, "Unopened");
   await expect(feedback(page)).toContainText(
-    `original table still has ${count} seats`,
+    `Keep using the ${count}-player guide even after others fold`,
   );
   await continueStep(page);
 }
@@ -138,19 +140,33 @@ for (const count of [9, 6] as const) {
     await page.getByRole("button", { name: "Reveal why" }).focus();
     await page.keyboard.press("Enter");
     await expect(feedback(page)).toContainText("AA is inside");
-    await expect(feedback(page)).toContainText("not an extra 25");
-    await expect(feedback(page)).toContainText(
-      "25 chips (2.5 BB) for every hand in the opening range",
+    await expect(feedback(page).locator(":scope > p")).toContainText([
+      "The button acts last after the flop",
+      "25 chips total (2.5 BB) for every hand in the opening range",
+    ]);
+    const sizeDetails = feedback(page).locator("details");
+    await expect(sizeDetails).not.toHaveAttribute("open", "");
+    await expect(sizeDetails.locator("p").first()).not.toBeVisible();
+    await sizeDetails.locator("summary").focus();
+    await page.keyboard.press("Enter");
+    await expect(sizeDetails.locator("p").first()).toBeVisible();
+    await expect(sizeDetails).toContainText(
+      "Hand strength does not set this practice size",
     );
-    await expect(feedback(page)).toContainText(
-      "Hand strength does not set that size",
+    await expect(sizeDetails).toContainText(
+      "Position, stacks, rake and opponents",
     );
-    await expect(feedback(page)).toContainText(
-      "Real position, stacks, rake and opponent responses",
-    );
-    await expect(feedback(page)).toContainText(
-      "does not prove an optimal size",
-    );
+    await expect(sizeDetails).toContainText("does not prove an optimal size");
+    await expect(sizeDetails).toContainText("25 total, not an extra 25");
+    const source = page.locator("details").filter({
+      has: page.getByText("Guide source and limits", { exact: true }),
+    });
+    await expect(source.locator("a")).not.toBeVisible();
+    await source.locator("summary").click();
+    await expect(source.locator("a")).toHaveAttribute("href", /^https:/);
+    await expect(source.locator("a")).toBeVisible();
+    await expect(source).toContainText("not a solver or a guarantee");
+    await source.locator("summary").click();
     await continueStep(page);
     const comparison = count === 9 ? "K7s" : "K2s",
       early = count === 9 ? "Under the gun + 1" : "Lojack";
@@ -160,15 +176,20 @@ for (const count of [9, 6] as const) {
     const contrastCards = await cards(page);
     // These specific weak suited kings fold in the earlier charts but open on BTN.
     await answer(page, "Raise to 25");
-    await expect(feedback(page)).toContainText("Compare with the baseline");
-    await expect(feedback(page)).toContainText("outside this baseline");
+    await expect(feedback(page)).toContainText("Compare with the guide");
+    await expect(feedback(page)).toContainText(
+      `outside the guide's ${early} opening range: fold`,
+    );
+    await expect(feedback(page)).toContainText(
+      "early position opens fewer hands",
+    );
     await page.getByRole("button", { name: "Try this decision again" }).click();
     await expect(feedback(page)).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Reveal why" }),
     ).toBeDisabled();
     await page
-      .getByText("Show the baseline for this hand", { exact: true })
+      .getByText("Show the guide for this hand", { exact: true })
       .click();
     await expect(page.locator(".walkthrough-prompt details p")).toContainText(
       `${comparison}: fold`,
@@ -190,13 +211,13 @@ for (const count of [9, 6] as const) {
     await answer(page, "30 chips");
     await expect(feedback(page)).toContainText("Call · pay 30");
     await expect(feedback(page)).toContainText(
-      "betting arithmetic, not strategy",
+      "cannot choose your response to a raise",
     );
     await continueStep(page);
     expect(await cards(page)).toEqual(raisedCards);
     await expect(page.locator(".learning-pot")).toContainText("Pot: 45 chips");
     await answer(page, "Raise to 50");
-    await expect(feedback(page)).toContainText("a 20-chip raise");
+    await expect(feedback(page)).toContainText("a 20-chip increase");
     await expect(feedback(page)).toContainText("not a strategy recommendation");
     await page
       .getByRole("button", { name: "Try a fresh preflop hand", exact: true })
@@ -247,10 +268,10 @@ test("an opening fold is available without automatic answer disclosure", async (
   );
   await expect(page.locator(".walkthrough-prompt details p")).not.toBeVisible();
   await answer(page, "Fold");
-  await expect(feedback(page)).toContainText("That follows the baseline");
+  await expect(feedback(page)).toContainText("That follows the guide");
   await expect(feedback(page)).toContainText("72s is outside");
   await expect(feedback(page)).toContainText(
-    "Hand strength does not set that size",
+    "25 chips total (2.5 BB) for every hand in the opening range",
   );
 });
 
@@ -351,7 +372,7 @@ for (const fixture of [
   });
 }
 
-test("baseline loading, errors and retry retain a usable current walkthrough", async ({
+test("guide loading, errors and retry retain a usable current walkthrough", async ({
   page,
 }) => {
   let release!: () => void;
@@ -368,14 +389,14 @@ test("baseline loading, errors and retry retain a usable current walkthrough", a
   });
   await page.goto("/");
   await expect(page.getByRole("status")).toHaveText(
-    "Loading the opening baseline…",
+    "Loading the opening guide…",
   );
   await expect(
     page.getByRole("button", { name: "New randomized walkthrough" }),
   ).toBeDisabled();
   release();
   await expect(page.getByRole("alert")).toContainText(
-    "Opening baselines could not load",
+    "Opening guide could not load",
   );
   await page.getByRole("button", { name: "Retry loading" }).click();
   await expect(

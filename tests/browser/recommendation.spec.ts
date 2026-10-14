@@ -44,6 +44,19 @@ for (const suggestion of ["fold", "call", "raise"] as const) {
       exact: true,
     });
     await expect(advice).toContainText("Tentative suggestion");
+    await expect(
+      advice.getByText("Bot estimate", { exact: true }),
+    ).toBeVisible();
+    const detail = advice.locator("details");
+    await expect(detail).not.toHaveAttribute("open", "");
+    await expect(
+      advice.getByText("A tentative bot-model preference.", { exact: true }),
+    ).toBeHidden();
+    await detail.locator(":scope > summary").focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      advice.getByText("A tentative bot-model preference.", { exact: true }),
+    ).toBeVisible();
     const id = await page.evaluate(() =>
       localStorage.getItem("poker-practice-table"),
     );
