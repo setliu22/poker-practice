@@ -8,7 +8,7 @@ Updated: 2026-10-13. Objective: install and use the head-chef workflow, verify/p
 - Extensive modified/untracked application and test files already existed. They are user work to preserve and separately checkpoint, not changes introduced by this documentation task.
 - No remote was configured at initial inspection. The GitHub connector authenticates as `setliu22`, but target `poker-practice` returned 404. CLI credentials/transport are unavailable in this environment; local DNS resolution also failed. The lead asked the user to create an empty private repo so the connector can upload. Publication remains pending; private visibility is the default.
 
-Current state: app changes and required chart assets checkpointed in `6546c94` on `master`; remaining changes are the reviewed workflow docs, README workflow links/history labeling, and GitHub CI. The user has created [setliu22/poker-practice](https://github.com/setliu22/poker-practice). Connector verified admin/push access and **public** visibility; publication awaits the user's public/private choice. No content has been uploaded yet.
+Current state: app changes and required chart assets checkpointed in `6546c94`, then reviewed workflow docs, README clarification and GitHub CI committed in `431c115`, on `master`. A subsequent documentation-only commit records this handoff; use `git log -1` for its exact SHA. The working tree is intended to be clean after that commit. The user has created [setliu22/poker-practice](https://github.com/setliu22/poker-practice). Connector verified admin/push access and **public** visibility; publication awaits the user's public/private choice. No content has been uploaded yet; no remote configured yet.
 
 ## Completed and decisions
 
@@ -36,9 +36,9 @@ Record each result here with: date, command/check, pass/fail/skip, counts or rel
 
 ## Next concrete actions
 
-1. Commit reviewed workflow docs, README clarification, CI and this current evidence separately from application checkpoint `6546c94`.
-2. Receive visibility choice for the created public repository; do not assume the earlier private default authorizes public upload.
-3. Upload through an available authenticated route, verify remote content/history, and record the URL and publication method. Disclose any original-history limitation rather than claiming an ordinary Git push.
+1. Receive visibility choice for the created public repository; do not assume the earlier private default authorizes public upload. A clarification is pending with the user; no additional approval is needed once that choice is known.
+2. Verify visibility and upload through the authenticated GitHub connector. Regenerate the source snapshot from final local HEAD (earlier temporary export predates this handoff). The CLI cannot retrieve the terminal's keychain credential; the existing SSH identity is passphrase-protected and its agent unavailable. A connector source-snapshot upload is feasible but cannot transfer original Git commit history; preserve original local history and disclose that limitation.
+3. Verify remote source tree against local content, record remote URL/commit and publication method, and add remote configuration. Do not imply local `master` and connector-created remote `main` have identical ancestry.
 4. Check GitHub CI after publication; if executable there, address real failures. Local browser launch remains an environmental gap.
 
 ## Blockers and gaps
