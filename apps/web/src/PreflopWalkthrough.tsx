@@ -1,54 +1,64 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Cards } from "./Cards";
 import type { OpeningChart } from "../../../packages/shared/src/preflop";
 import {
   baselineAction,
+  generateWalkthrough,
   preflopTransfer,
   walkthroughChart,
-  walkthroughSeats,
-  raisedPotExample,
+  walkthroughSeatsFor,
 } from "../../../packages/shared/src/preflop-walkthrough";
 const titles = [
   "Watch the action reach you",
-  "Make the first raise",
+  "Choose an opening action",
   "Try a different hand in early position",
   "Move back to the button",
   "Someone has already raised",
   "A re-raise needs a new total",
   "Try a fresh preflop hand",
 ];
+function randomSeed() {
+  return crypto.getRandomValues(new Uint32Array(1))[0];
+}
+const sizingExplanation =
+  "Deciding whether to open uses the hand and position. Choosing the size is a separate decision: this app illustrates 25 chips (2.5 BB) for every hand in the opening range. Hand strength does not set that size. Real position, stacks, rake and opponent responses affect the choice; this chart does not prove an optimal size.";
 export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
   const [charts, setCharts] = useState<OpeningChart[]>([]),
     [error, setError] = useState(""),
     [reload, setReload] = useState(0),
+    [players, setPlayers] = useState<6 | 9>(9),
     [step, setStep] = useState(0),
     [furthest, setFurthest] = useState(0),
     [folds, setFolds] = useState(0),
     [answer, setAnswer] = useState(""),
     [feedback, setFeedback] = useState(false),
-    [seed, setSeed] = useState(() => {
-      const value = new Uint32Array(1);
-      crypto.getRandomValues(value);
-      return value[0];
-    }),
+    [seed, setSeed] = useState(randomSeed),
+    [transferSeed, setTransferSeed] = useState(seed),
     [practiceCount, setPracticeCount] = useState(0);
   const heading = useRef<HTMLHeadingElement>(null);
+  const recentContexts = useRef<string[]>([]);
+  const recentTransfers = useRef<string[]>([]);
   useEffect(() => {
     const controller = new AbortController();
     setError("");
+    setCharts([]);
     void fetch("/api/preflop-charts", { signal: controller.signal })
       .then(async (r) => {
         if (!r.ok) throw new Error("Opening baselines could not load.");
         return (await r.json()) as OpeningChart[];
       })
       .then((data) => {
-        if (
-          !["Lojack", "Hijack", "Cutoff", "Button"].every((position) =>
-            walkthroughChart(data, position),
+        for (const count of [6, 9] as const) {
+          if (
+            !walkthroughSeatsFor(count)
+              .slice(0, -2)
+              .every((position) => walkthroughChart(data, position, count))
           )
-        )
-          throw new Error("The six-player opening baseline is incomplete.");
-        setCharts(data);
+            throw new Error(
+              `The ${count}-player opening baseline is incomplete.`,
+            );
+        }
+        if (!controller.signal.aborted) setCharts(data);
       })
       .catch((e) => {
         if (!controller.signal.aborted) setError((e as Error).message);
@@ -57,67 +67,135 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
   }, [reload]);
   useEffect(() => {
     heading.current?.focus();
-  }, [step, feedback, seed]);
-  const fresh = charts.length ? preflopTransfer(charts, seed) : null;
+  }, [step, feedback, seed, transferSeed, players]);
+  const context = useMemo(
+    () => (charts.length ? generateWalkthrough(charts, seed, players) : null),
+    [charts, seed, players],
+  );
+  const fresh = useMemo(
+    () =>
+      charts.length ? preflopTransfer(charts, transferSeed, players) : null,
+    [charts, transferSeed, players],
+  );
+  const seats = context?.seats ?? walkthroughSeatsFor(players);
   const position =
     step === 2
-      ? "Lojack"
+      ? (context?.contrast.earlyPosition ?? seats[0])
       : step === 6
         ? (fresh?.position ?? "Button")
         : "Button";
-  const hero = walkthroughSeats.indexOf(position),
-    raised = step === 4 || step === 5;
-  const hole =
+  const hero = seats.indexOf(position),
+    button = seats.indexOf("Button"),
+    cutoff = seats.indexOf("Cutoff");
+  const raised = step === 4 || step === 5;
+  const example =
     step < 2
-      ? ["Ks", "Qs"]
+      ? context?.opening
       : step < 4
-        ? ["Kc", "Td"]
+        ? context?.contrast
         : raised
-          ? ["Ah", "Kh"]
-          : (fresh?.hole ?? []);
-  const hand =
-    step < 2 ? "KQs" : step < 4 ? "KTo" : raised ? "AKs" : (fresh?.hand ?? "");
-  const chart = walkthroughChart(charts, position);
+          ? context?.raised
+          : fresh;
+  const hole = example?.hole ?? [],
+    hand = example?.hand ?? "";
+  const chart = walkthroughChart(charts, position, players);
   const expected =
     step === 0
       ? "unopened"
       : step === 4
-        ? "25"
+        ? String(context?.raised.callCost)
         : step === 5
-          ? "40"
+          ? String(context?.raised.minimumRaiseTo)
           : chart
             ? baselineAction(chart, hand)
             : "";
   const agrees = answer === expected;
+  function clearAnswer() {
+    setAnswer("");
+    setFeedback(false);
+  }
   function navigate(target: number) {
     setStep(target);
     setFurthest((n) => Math.max(n, target));
-    setAnswer("");
-    setFeedback(false);
-    setFolds(target === 0 ? 0 : 3);
+    clearAnswer();
+    setFolds(0);
+  }
+  function newWalkthrough(count: 6 | 9 = players) {
+    if (!context) return;
+    const avoid = [...recentContexts.current, context.fingerprint];
+    const base = randomSeed();
+    let candidate = base;
+    for (let attempt = 0; attempt < 128; attempt++) {
+      candidate = (base + Math.imul(attempt, 0x9e3779b9)) >>> 0;
+      if (
+        !avoid.includes(
+          generateWalkthrough(charts, candidate, count).fingerprint,
+        )
+      )
+        break;
+    }
+    recentContexts.current = avoid.slice(-12);
+    setPlayers(count);
+    setSeed(candidate);
+    setTransferSeed(candidate);
+    setPracticeCount(0);
+    setFurthest(0);
+    navigate(0);
   }
   function nextHand() {
-    const value = new Uint32Array(1);
-    crypto.getRandomValues(value);
-    setSeed(value[0]);
+    if (!fresh) return;
+    const avoid = [
+      ...recentTransfers.current,
+      `${players}:${fresh.position}:${fresh.hand}`,
+    ];
+    const base = randomSeed();
+    let candidate = base;
+    for (let attempt = 0; attempt < 128; attempt++) {
+      candidate = (base + Math.imul(attempt, 0x9e3779b9)) >>> 0;
+      const next = preflopTransfer(charts, candidate, players);
+      if (!avoid.includes(`${players}:${next.position}:${next.hand}`)) break;
+    }
+    recentTransfers.current = avoid.slice(-12);
+    setTransferSeed(candidate);
     setPracticeCount((n) => n + 1);
-    setAnswer("");
-    setFeedback(false);
+    clearAnswer();
   }
+  const raiseTo = context?.raised.raiseTo ?? 25;
+  const minimumRaiseTo = context?.raised.minimumRaiseTo ?? 40;
   const feedbackText =
     step === 0
-      ? "Everyone before the button folded. Only the blinds remain in the pot, so this is an unopened pot. The original table still has six seats: use the six-player button baseline."
+      ? `Everyone before the button folded. Only the blinds remain in the pot, so this is an unopened pot. The original table still has ${players} seats: use the ${players}-player button baseline.`
       : step === 1
-        ? "This illustrative baseline opens KQs from the button. Raise to 25 means your total bet is 25 chips (2.5 big blinds), not an extra25 on top of another bet. The blinds can still fold, call or re-raise."
+        ? `${hand} is ${expected === "raise" ? "inside" : "outside"} the ${players}-player Button opening baseline. ${expected === "raise" ? "Raise to 25" : "Fold"} agrees with this authored baseline. Raise to 25 means a total bet of 25 chips, not an extra 25 on top of another bet. Opening can win the blinds or build a pot in position; the button acts last after the flop if still in the hand. The two blinds can still fold, call or re-raise.`
         : step === 2
-          ? "The same KTo is outside this baseline's Lojack opening range. Five players still have a decision after you. Folding agrees with this authored baseline; it is not proof that every real game requires a fold."
+          ? `The same ${hand} is outside this baseline's ${position} opening range. ${players - hero - 1} players still have a decision after you. Folding agrees with this authored baseline; it is not proof that every real game requires a fold.`
           : step === 3
-            ? "KTo enters this baseline's button opening range. The hand did not become stronger: only two opponents, the blinds, are left to act. This baseline opens more hands later. You still need a plan if they call or raise."
+            ? `${hand} enters this baseline's Button opening range. The hand did not become stronger: only two opponents, the blinds, are left to act. This baseline opens more hands later. You still need a plan if they call or raise.`
             : step === 4
-              ? "You have posted 0, so matching the cutoff's total25 costs 25. The cutoff has entered voluntarily with a raise: this is a response to an opening range, not a first-in opening decision. The opening chart does not choose your response here."
+              ? `You have posted 0, so matching the cutoff's total ${raiseTo} costs ${raiseTo} chips. The cutoff entered voluntarily with a raise: this is a response to an opening range, not a first-in opening decision. The opening chart does not choose your response here. This is betting arithmetic, not strategy.`
               : step === 5
-                ? "The cutoff increased the bet from 10 to 25: a15-chip raise. The minimum full re-raise adds at least another 15, making your total 40. You may fold, call 25, or raise to 40 or more. Which is best depends on the raiser's range, price and the blinds still behind you; we are checking the betting rule, not inventing a strategy recommendation."
-                : `${fresh?.hand} is ${fresh?.action === "raise" ? "inside" : "outside"} the six-player ${position} opening baseline. ${fresh?.action === "raise" ? "Raise to 25" : "Fold"} agrees with this baseline in the supplied unopened situation. This comparison is practice using a reference, not a poker skill score.`;
+                ? `The cutoff increased the bet from 10 to ${raiseTo}: a ${raiseTo - 10}-chip raise. The minimum full re-raise adds at least another ${raiseTo - 10}, making your total ${minimumRaiseTo}. You may fold, call ${raiseTo}, or raise to ${minimumRaiseTo} or more. Which is best depends on the raiser's range, price and the blinds still behind you. This is betting arithmetic, not a strategy recommendation.`
+                : `${fresh?.hand} is ${fresh?.action === "raise" ? "inside" : "outside"} the ${players}-player ${position} opening baseline. ${fresh?.action === "raise" ? "Raise to 25" : "Fold"} agrees with this baseline in the supplied unopened situation. This comparison is practice using a reference, not a poker skill score.`;
+  const choiceValues =
+    step === 0
+      ? [
+          { value: "unopened", label: "Unopened" },
+          { value: "raised", label: "Facing a raise" },
+        ]
+      : step === 4
+        ? [10, raiseTo, raiseTo + 15].map((n) => ({
+            value: String(n),
+            label: `${n} chips`,
+          }))
+        : step === 5
+          ? [raiseTo, minimumRaiseTo, minimumRaiseTo + 10].map((n) => ({
+              value: String(n),
+              label: `Raise to ${n}`,
+            }))
+          : [
+              { value: "raise", label: "Raise to 25" },
+              { value: "fold", label: "Fold" },
+            ];
   return (
     <div className="learning-layout preflop-walkthrough">
       <div className="page-heading">
@@ -127,9 +205,30 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
             {titles[step]}
           </h1>
           <p>
-            Six players · 1,000-chip stacks · Blinds 5/10 · No antes or rake
+            {players} players · 1,000-chip stacks · Blinds 5/10 · No antes or
+            rake
           </p>
         </div>
+      </div>
+      <div className="button-row walkthrough-settings">
+        <label>
+          Walkthrough table size
+          <select
+            value={players}
+            disabled={!context}
+            onChange={(e) => newWalkthrough(Number(e.target.value) as 6 | 9)}
+          >
+            <option value="9">9 players</option>
+            <option value="6">6 players</option>
+          </select>
+        </label>
+        <button
+          className="secondary"
+          disabled={!context}
+          onClick={() => newWalkthrough()}
+        >
+          New randomized walkthrough
+        </button>
       </div>
       <nav aria-label="Walkthrough progress" className="walkthrough-progress">
         {titles.map((title, index) => (
@@ -150,49 +249,51 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
           <p role="alert">{error}</p>
           <button onClick={() => setReload((n) => n + 1)}>Retry loading</button>
         </section>
-      ) : !chart ? (
+      ) : !context || !chart ? (
         <p role="status">Loading the opening baseline…</p>
       ) : (
         <section className="panel walkthrough-scene">
           <div
-            className="preflop-learning-table"
-            aria-label="Six-player table and public action order"
+            className="preflop-learning-table walkthrough-grid"
+            aria-label={`${players}-player table and public action order`}
           >
             <div className="learning-pot">
               <strong>Preflop</strong>
-              <span>Pot: {raised ? 40 : 15} chips</span>
+              <span>Pot: {raised ? context.raised.potChips : 15} chips</span>
               <span>
-                {raised ? "Cutoff raised to 25" : "Only the blinds are in"}
+                {raised
+                  ? `Cutoff raised to ${raiseTo}`
+                  : "Only the blinds are in"}
               </span>
             </div>
-            {walkthroughSeats.map((seat, index) => {
+            {seats.map((seat, index) => {
+              const acting = step === 0 && index === folds && folds < button;
               const folded =
                 index < hero &&
                 (step !== 0 || index < folds) &&
-                !(raised && index === 2);
-              const status =
-                step === 0 && index === folds && folds < 3
-                  ? "Acting now"
-                  : index === hero
-                    ? step === 0 && folds < 3
-                      ? "Waiting"
-                      : "Your turn"
-                    : raised && index === 2
-                      ? "Raised to 25"
-                      : folded
-                        ? "Folded"
-                        : index === 4
-                          ? "Posted 5"
-                          : index === 5
-                            ? "Posted 10"
-                            : "Waiting";
+                !(raised && index === cutoff);
+              const status = acting
+                ? "Acting now"
+                : index === hero
+                  ? step === 0 && folds < button
+                    ? "Waiting"
+                    : "Your turn"
+                  : raised && index === cutoff
+                    ? `Raised to ${raiseTo}`
+                    : folded
+                      ? "Folded"
+                      : seat === "Small blind"
+                        ? "Posted 5"
+                        : seat === "Big blind"
+                          ? "Posted 10"
+                          : "Waiting";
               return (
                 <div
-                  className={`learning-seat seat-${index} ${index === hero ? "hero-seat" : ""} ${step === 0 && index === folds && folds < 3 ? "acting-seat" : ""} ${folded ? "folded-seat" : ""} ${raised && index === 2 ? "raised-seat" : ""}`}
+                  className={`learning-seat seat-${index} ${index === hero ? "hero-seat" : ""} ${acting ? "acting-seat" : ""} ${folded ? "folded-seat" : ""} ${raised && index === cutoff ? "raised-seat" : ""}`}
                   key={seat}
                 >
                   <strong>
-                    {seat}
+                    {index + 1}. {seat}
                     {seat === "Button" ? " · D" : ""}
                   </strong>
                   <span>{status}</span>
@@ -201,27 +302,30 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
               );
             })}
           </div>
-          <div className="walkthrough-prompt">
+          <div
+            className="walkthrough-prompt"
+            key={`${players}:${seed}:${transferSeed}:${step}`}
+          >
             <p className="quiet">
               Step {step + 1} of 7
-              {step === 6 ? ` · Transfer hand${practiceCount + 1}` : ""}
+              {step === 6 ? ` · Transfer hand ${practiceCount + 1}` : ""}
             </p>
             <h2>
               {step === 0
-                ? "The button acts after the cutoff"
+                ? `${hand}: the button acts after the cutoff`
                 : step === 1
-                  ? "Worked example: K♠Q♠ on the button"
+                  ? `${hand} on the button: choose an opening action`
                   : step === 2
-                    ? "K♣T♦ with five players still to act"
+                    ? `${hand} in ${position}: ${players - hero - 1} players still to act`
                     : step === 3
-                      ? "K♣T♦ with only the blinds left"
+                      ? `${hand} on the button: only the blinds left`
                       : step === 4
-                        ? "A raise changes the question"
+                        ? `${hand}: a raise changes the question`
                         : step === 5
-                          ? "Separate the total bet from the raise amount"
-                          : `Your turn: ${position}`}
+                          ? `${hand}: separate the total bet from the raise amount`
+                          : `${hand}: your turn in ${position}`}
             </h2>
-            {step === 0 && folds < 3 ? (
+            {step === 0 && folds < button ? (
               <>
                 <p>
                   Follow the public action in order. The dealer button marks the
@@ -231,27 +335,27 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
                   className="primary"
                   onClick={() => setFolds((n) => n + 1)}
                 >
-                  Watch {walkthroughSeats[folds]} fold
+                  Watch {seats[folds]} fold
                 </button>
               </>
             ) : (
               <>
                 <p>
                   {step === 0
-                    ? "Three folds reach you. Is this an unopened pot or a pot facing a raise?"
+                    ? `${button} folds reach you. Is this an unopened pot or a pot facing a raise?`
                     : step === 1
-                      ? "The baseline includes this suited king–queen. Try its opening action: everyone before you folded, and you have not posted a blind."
+                      ? "Everyone before you folded, and you have not posted a blind. Use the hand and position to choose its action in the reference baseline."
                       : step === 2
-                        ? "Now try king–ten offsuit from early position. Check the optional baseline hint, then choose its action."
+                        ? "Try this hand from earlier position. Choose its action in the reference baseline; an optional hint is available."
                         : step === 3
                           ? "Everyone before the button folds. Does the baseline now include the exact same hand?"
                           : step === 4
-                            ? "Lojack and hijack folded; cutoff raised to 25. You are on the button with A♥K♥ and have paid 0 this street. How many new chips would calling cost?"
+                            ? `Everyone before the cutoff folded; cutoff raised to ${raiseTo}. You are on the button with ${hand} and have paid 0 this street. How many new chips would calling cost?`
                             : step === 5
-                              ? "Blinds are5/10; the cutoff raised to 25. What is the minimum legal full re-raise total from the button?"
+                              ? `Blinds are 5/10; the cutoff raised to ${raiseTo}. What is the minimum legal full re-raise total from the button?`
                               : "Everyone before you folded. Use position and the reference baseline to choose an opening action."}
                 </p>
-                {(step === 2 || step === 3 || step === 6) && (
+                {[1, 2, 3, 6].includes(step) && (
                   <details>
                     <summary>Show the baseline for this hand</summary>
                     <p>
@@ -259,8 +363,8 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
                       {baselineAction(chart, hand) === "raise"
                         ? "raise to 25"
                         : "fold"}{" "}
-                      in the six-player {position} authored opening range.{" "}
-                      {6 - hero - 1} players are still to act.
+                      in the {players}-player {position} authored opening range.{" "}
+                      {players - hero - 1} players are still to act.
                     </p>
                   </details>
                 )}
@@ -282,28 +386,7 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
                               : "Action in this illustrative baseline"}
                       </legend>
                       <div className="learning-choices">
-                        {(step === 0
-                          ? [
-                              { value: "unopened", label: "Unopened" },
-                              { value: "raised", label: "Facing a raise" },
-                            ]
-                          : step === 4
-                            ? [
-                                { value: "15", label: "15 chips" },
-                                { value: "25", label: "25 chips" },
-                                { value: "40", label: "40 chips" },
-                              ]
-                            : step === 5
-                              ? [
-                                  { value: "25", label: "Raise to 25" },
-                                  { value: "40", label: "Raise to 40" },
-                                  { value: "50", label: "Raise to 50" },
-                                ]
-                              : [
-                                  { value: "raise", label: "Raise to 25" },
-                                  { value: "fold", label: "Fold" },
-                                ]
-                        ).map((choice) => (
+                        {choiceValues.map((choice) => (
                           <label key={choice.value}>
                             <input
                               type="radio"
@@ -328,21 +411,20 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
                   >
                     <h3>
                       {agrees
-                        ? step === 4 || step === 5 || step === 0
+                        ? raised || step === 0
                           ? "That matches the situation"
                           : "That follows the baseline"
-                        : step === 4 || step === 5 || step === 0
+                        : raised || step === 0
                           ? "Recheck the situation"
                           : "Compare with the baseline"}
                     </h3>
                     <p>{feedbackText}</p>
+                    {[1, 3, 6].includes(step) && <p>{sizingExplanation}</p>}
                     {raised && (
                       <div className="button-row">
                         <span>Fold · pay 0</span>
-                        <span>Call · pay{raisedPotExample.callCost}</span>
-                        <span>
-                          Raise · total ≥ {raisedPotExample.minimumRaiseTo}
-                        </span>
+                        <span>Call · pay {context.raised.callCost}</span>
+                        <span>Raise · total ≥ {minimumRaiseTo}</span>
                       </div>
                     )}
                     <div className="button-row">
@@ -358,13 +440,7 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
                             ? "Try a fresh preflop hand"
                             : "Next preflop hand"}
                       </button>
-                      <button
-                        className="secondary"
-                        onClick={() => {
-                          setFeedback(false);
-                          setAnswer("");
-                        }}
-                      >
+                      <button className="secondary" onClick={clearAnswer}>
                         Try this decision again
                       </button>
                     </div>
@@ -389,12 +465,18 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
         <summary>About this opening baseline</summary>
         <p>
           Raise/fold guidance from{" "}
-          <a href={chart?.source.url}>PreflopR's authored opening ranges</a>,
-          not a solver or a guarantee of the best move. Source stack depth and
-          sizing are unspecified; 100 big blinds and raise-to 2.5 BB are this
-          app's teaching assumptions. Only unopened first actions use the chart.
-          No chart agreement is recorded as a skill grade.
+          {chart ? (
+            <a href={chart.source.url}>PreflopR's authored opening ranges</a>
+          ) : (
+            "PreflopR's authored opening ranges"
+          )}
+          , not a solver or a guarantee of the best move. Source stack depth,
+          rake and sizing are unspecified; 100 big blinds, no rake and raise-to
+          2.5 BB are this app's teaching assumptions. Only unopened first
+          actions use the chart. No chart agreement is recorded as a skill
+          grade.
         </p>
+        <p>{sizingExplanation}</p>
       </details>
       <details className="panel">
         <summary>More practice and earlier lessons</summary>

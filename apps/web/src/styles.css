@@ -3547,3 +3547,17 @@ main:has(.bot-page-heading) {
     width: 100%;
   }
 }
+
+/* Walkthrough seats follow the public preflop order, including full ring. */
+.preflop-walkthrough .walkthrough-settings label { display:flex; flex-direction:column; gap:6px; }
+.preflop-walkthrough .walkthrough-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; min-height:0; padding:14px; border-radius:20px; }
+.preflop-walkthrough .walkthrough-grid .learning-pot { position:static; grid-column:1/-1; padding:8px; }
+.preflop-walkthrough .walkthrough-grid .learning-seat { position:static; width:auto; min-width:0; min-height:75px; overflow-wrap:anywhere; }
+.preflop-walkthrough .walkthrough-grid .cards { flex-wrap:wrap; }
+.preflop-walkthrough .walkthrough-settings button { white-space:normal; }
+@media(max-width:520px) {
+  .preflop-walkthrough .walkthrough-grid { grid-template-columns:repeat(2,minmax(0,1fr)); padding:8px; gap:8px; }
+  .preflop-walkthrough .walkthrough-grid .learning-seat { padding:8px 4px; font-size:.78rem; }
+  .preflop-walkthrough .walkthrough-grid .learning-seat strong { font-size:.82rem; }
+  .preflop-walkthrough .walkthrough-settings { align-items:stretch; }
+}

@@ -1,30 +1,31 @@
 # Current handoff
 
-Updated: 2026-10-14 UTC. Owner: lead. Objective complete: online no-limit Hold’em cash Decision Lab with full-ring support, durable learning review, independent verification and GitHub delivery.
+Updated2026-10-14UTC. Active objective: randomize the guided preflop scenarios and explain opening size separately from hand strength. Implementation, independent review and core verification complete; GitHub Linux browser CI pending.
 
-## Delivered state
+## Actual state
 
-- Public repo: https://github.com/setliu22/poker-practice. Reviewed application commit: `bc8661f5f5833c94bcc0a13dbb3a5eb3b0a8f9d6`, tree `867929d17efd81e14c38e66cce75f35005f1399a`. Feature branch `feat/online-cash-training`; final documentation handoff is integrated into `main`. Read `git status` / `git log -1` for the exact final docs commit rather than treating this file as proof of the current tree.
-- Local checkpoint `local-checkpoints/ef0eaa8` preserves the equivalent CLI commit. GitHub Git-data commits have different metadata but their trees were compared exactly. Earlier checkpoints/history preserved. No runtime dependencies, learner data, build/test artifacts or external solver files uploaded.
-- **Learn → Open online cash Decision Lab**: select 2–9 seats, default nine. Distinguishes table seats from active players. Four river skills: bluff catching, value betting, pure bluffing, closing multiway calls (three or more seats).
-- Answer action, rationale, estimate and confidence before feedback. Immutable saved first answers; tracked hints, guided follow-ups and independent answers count separately. Follow-ups change range weights and can retain or change the preferred action. Fresh review excludes recent semantic fingerprints; weakness/confidence summaries and next-session cues guide study.
-- Exact arithmetic under supplied weighted study ranges/responses: joint card-collision conditioning, split-pot shares, disclosed fixed rake, legal public histories and 100-BB stack accounting. These assumptions are not calibrated human ranges or proof of real-world mastery. See [design, sources and limits](docs/online-cash-practice.md).
-- Additive migration 009, versioned private snapshots, durable resume, export and clear. Exports omit seeds and locked follow-ups. Existing lessons, games/replays, privacy, MIT preflop assets and optional external GTOpen preserved.
+- Branch `fix/randomized-preflop-walkthrough` from clean `main` at `8204eef157f27f119a2a3a2ed4c0e0e8283276ed`. Generator, UI, tests, README and design note ready for feature commit. No chart assets, API/schema, runtime dependencies or learner data changed.
+- Previous cash Decision Lab complete and preserved: code `bc8661f`, run38510972941 passed315 unit/integration tests/build/118 desktop/mobile cases. Public repository https://github.com/setliu22/poker-practice.
+- Dev session **99275** runs `npm run dev` with Node24 at127.0.0.1:5173 (API3001). Earlier session98071 was restarted because Vite cached the old module despite filesystem changes. Read-only HTTP check now verifies new randomized controls/neutral heading in served module and API health `ok`. User can refresh the app.
 
-## Verification evidence
+## Implemented changes
 
-[GitHub run 38510972941](https://github.com/setliu22/poker-practice/actions/runs/38510972941), on application commit `bc8661f`, completed successfully:
+- Generated 6/9-seat walkthroughs defaultnine; direct matching authored charts only. New randomized walkthrough changes hand classes, earlier comparison position and observed opposing raise totals; replay/back preserve scenes. Exact paired cards remain the same across the position comparison and raised-pot arithmetic steps.
+- Opening example includes both raise and fold hands. Optional hints; no automatic chart answer in prompt. Feedback explicitly separates whether to open from the app's fixed **2.5BB whole-range teaching size**, which is not calculated from the private hand's strength or claimed optimal.
+- Visible seats/action order, fold counts, remaining actors, pot and legal betting totals derive from current context. Opposing totals20/25/30/40 give callcost20/25/30/40, minimum full re-raise30/40/50/70, pot35/40/45/55. Arithmetic does not imply a strategic response.
+- Bounded semantic repeat avoidance for new walkthrough and final transfer; reset feedback/answers on context changes. Scoped full-ring responsive grid, focus/retry behavior, whitespace corrections. Legacy six-player helper defaults/output preserved.
+- [Design and sizing source](docs/preflop-practice.md) explains authored-range limits. Primary GTO Wizard source inspected; no copied solver ranges or changed licensed data.
 
-- **315 unit/integration tests passed**, two optional real-solver tests skipped; 33 files passed, one skipped.
-- **Production build passed**, including TypeScript checks.
-- **All 118 desktop/mobile browser cases passed**, including 10 new cash flows for privacy, first-answer requirements, hints/guided separation, reload/fresh review, 9/8/2 seats, settings isolation, retry and clear recovery. Mobile tests check 320-pixel bounds.
-- Independent code review found no actionable defects. Independent functional tester passed full local tests/build, final scoped engine/API **22/22**, and temporary actual-API smoke for **all 31 valid seat/skill combinations**, 62 immutable answers, assistance counts, staged privacy, DB reopen, export and clear. User data untouched.
-- Local Chromium cannot launch (Mach-port error 141/SIGTRAP); Linux CI provides actual browser evidence. Optional solver execution not repeated for this feature because solver code is unchanged.
-- Final handoff and worker-lifecycle changes are documentation only, self-reviewed with formatting/link inspection and `git diff --check`. They do not change the application tested above.
-- Local logs: `/tmp/cash-functional-vitest.log`, `/tmp/cash-functional-final-cash.log`, `/tmp/cash-functional-final-build.log`, `/tmp/cash-functional-playwright-collection.log`, `/tmp/cash-functional-final-api-smoke.log`.
+## Verification and ownership
 
-## Agent lifecycle and next session
+- Independent code review: no remaining actionable findings; neutral opening-action heading correction verified. Review covered generation, arithmetic/positions, UI state/privacy and meaningful tests.
+- Independent full `npm test -- --maxWorkers=1`: **326 passed, 2 optional live-solver tests skipped**, 33 files passed/one skipped,57.41s.
+- `npm run build`: **passed** after application freeze. Walkthrough unit suite13/13 passed.
+- Independent temporary smoke: **4611 seeds per6/9 variant**, deterministic legal cards,169 opening classes, contrasts and all four arithmetic fixtures; exact legacy six-player output reproduced against8204eef for all seeds. Read-only direct chart API/provenance check passed.
+- `npm run test:browser -- --list`: **132 cases collected in15 files**, including16 walkthrough desktop/mobile cases. Actual browser execution pending Linux CI; local Chromium known Mach-port launch block, no redundant launch attempt.
+- `git diff --check`: passed. Logs `/tmp/preflop-functional-{tests,build,playwright-list,smoke,api-get}.log`.
+- Builders, independent reviewer and tester finished and returned ownership. No idle/unassigned agents required. Final handoff edits remain lead-owned; retire completed workers and report actual live roster.
 
-The user requested removing unused agents. All builders/reviewer/tester finished and returned ownership; the live roster contains only the lead. No unassigned workers are running. `START_HERE.md`, `AGENTS.md` and the workflow now require assigned tickets/roles and retirement after results are captured. Current collaboration tools expose interruption but no deletion of historical entries; do not claim those entries were deleted.
+## Next action
 
-No required feature work remains. Start a new objective from `START_HERE.md` and inspect actual state. Node is installed at `~/.local/share/poker-practice/node-v24.21.0-darwin-arm64/bin`. Use GitHub connector writes if the CLI cannot access credentials; public fetch can use scoped `http.curloptResolve=github.com:443:140.82.114.3` in this session. Preserve clean checkpoints and compare trees before synchronizing connector commits. Ordinary practice needs only local servers and no solver or account.
+Inspect staged source, commit, publish the branch via authenticated GitHub connector, compare tree/head and inspect Linux full suite. Resolve real CI findings, then integrate and update final handoff. Preserve checkpoints when connector commit metadata differs from CLI. Node runtime: `~/.local/share/poker-practice/node-v24.21.0-darwin-arm64/bin`. No required live solver work; its code is unchanged.
