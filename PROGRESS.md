@@ -8,7 +8,9 @@ Updated: 2026-10-13. Objective: install and use the head-chef workflow, verify/p
 - Extensive modified/untracked application and test files already existed. They are user work to preserve and separately checkpoint, not changes introduced by this documentation task.
 - No remote was configured at initial inspection. The GitHub connector authenticates as `setliu22`, but target `poker-practice` returned 404. CLI credentials/transport are unavailable in this environment; local DNS resolution also failed. The lead asked the user to create an empty private repo so the connector can upload. Publication remains pending; private visibility is the default.
 
-Current state: app changes and required chart assets checkpointed in `6546c94`, then reviewed workflow docs, README clarification and GitHub CI committed in `431c115`, on `master`. A subsequent documentation-only commit records this handoff; use `git log -1` for its exact SHA. The working tree is intended to be clean after that commit. The user has created [setliu22/poker-practice](https://github.com/setliu22/poker-practice). Connector verified admin/push access and **public** visibility; the user explicitly approved public upload. Publication is in progress. No content has been uploaded yet; no remote configured yet.
+Current state: app changes and required chart assets checkpointed in `6546c94`, reviewed workflow/CI in `431c115`, and public authorization in `5b64c71`. The branch is now `main`, with `origin` set to `https://github.com/setliu22/poker-practice.git`. This subsequent documentation-only commit records the current handoff; use `git log -1` for its SHA. The working tree is intended to be clean afterward.
+
+The user explicitly approved public publication. The GitHub connector can read the repository but rejected its first file write with **403: Resource not accessible by integration**. Installation/account queries returned empty lists. **No source content was uploaded**. The user has been given the exact authenticated-terminal push below, which preserves all original Git history; source-snapshot upload is no longer the active route.
 
 ## Completed and decisions
 
@@ -36,11 +38,20 @@ Record each result here with: date, command/check, pass/fail/skip, counts or rel
 
 ## Next concrete actions
 
-1. Public visibility is explicitly authorized by the user. Upload the committed source snapshot and verify the remote tree.
-2. Verify visibility and upload through the authenticated GitHub connector. Regenerate the source snapshot from final local HEAD (earlier temporary export predates this handoff). The CLI cannot retrieve the terminal's keychain credential; the existing SSH identity is passphrase-protected and its agent unavailable. A connector source-snapshot upload is feasible but cannot transfer original Git commit history; preserve original local history and disclose that limitation.
-3. Verify remote source tree against local content, record remote URL/commit and publication method, and add remote configuration. Do not imply local `master` and connector-created remote `main` have identical ancestry.
-4. Check GitHub CI after publication; if executable there, address real failures. Local browser launch remains an environmental gap.
+1. Await the user's authenticated-terminal push (already requested):
+
+   ```sh
+   cd '/Users/a../poker-practice'
+   gh auth setup-git
+   git push -u origin main
+   ```
+
+   `origin` and `main` are already configured; no additional publication approval is needed. This route uploads source and complete history. The connector cannot write (403); this session cannot read the terminal keychain credential and its SSH agent is unavailable.
+
+2. After the user reports success, read GitHub's `main` commit and verify its SHA/tree against local HEAD. Confirm the source, workflow files, license/provenance assets, and no learner/build/dependency files were published.
+3. Check the push-triggered GitHub Actions run and inspect failures if any. Record remote URL/SHA and actual CI results. Do not claim browser or CI passes without evidence.
+4. Update plan/progress with verified publication; if editing the handoff creates another local commit, publish that update through a now-authorized route or state that it remains local.
 
 ## Blockers and gaps
 
-Public visibility is authorized. The authenticated connector will publish the source snapshot; original Git commit history stays local. Browser behavior is unverified because Chromium cannot launch here. Neither condition blocks documentation, unit/build checks, review, or local commits. Do not mark upload complete until the remote is verified; do not represent browser launch errors as exercised application tests. No reviewer or test result should be inferred from a plan checkbox.
+GitHub connector write access is denied by the integration (403). Local CLI cannot access the other terminal's keychain credential, and the SSH identity needs its unavailable agent/passphrase. The repo is committed and ready; an authenticated user-terminal push is the remaining external dependency. Public visibility is authorized. Browser behavior is unverified locally because Chromium cannot launch here; CI is installed but not yet run. Do not mark upload complete until GitHub's branch is verified.
