@@ -2,6 +2,8 @@
 
 A complete local learning app for heads-up, no-limit Texas Hold’em. Five exercise modes, a playable bot table, deterministic feedback, 12 original decision scenarios, and SQLite progress tracking. No login, API key, solver, paid service, or external connection is used during practice.
 
+**For coding agents:** read [START_HERE.md](START_HERE.md) for the portable head-chef workflow, current plan/handoff, and verification instructions. The [system design](docs/agent-workflow.md) explains bounded delegation and independent review.
+
 ## Install and run
 
 Install **Node.js 24 LTS** (with npm). Run these commands from the repository root:
@@ -183,7 +185,9 @@ npm run test:browser
 
 On Linux, Playwright may require `npx playwright install --with-deps chromium`. Browser installation requires network access once; subsequent tests and normal practice are local. Browser tests use their own `data/browser-test.sqlite` database, clear it between cases, and start/stop both servers automatically. They use dedicated ports 5174 and 3002, so an existing app can keep running.
 
-Verified during delivery:
+Historical verification (earlier deliveries):
+
+These counts describe earlier snapshots, not the current working tree. Current commands, outcomes, and coverage limits are recorded in [PROGRESS.md](PROGRESS.md); use [VERIFY.md](VERIFY.md) to reproduce checks.
 
 - **254 Vitest tests passing across 21 files:** all hand categories/ranking order, kicker comparisons, wheel straights, board-only ties, seven-card selection, duplicates, odds/tolerance, blockers/empty ranges, ties, known turn outcomes, legal stronger categories, seeded generation, all 12 authored scenarios, independent scenario equity checks, input validation, reopened-database persistence, concurrent/repeated submissions, export/clear targeted selection, bot privacy, betting order, short-raise reopening, side-pot eligibility, odd chips, 200 complete seeded bot hands with chip conservation, range inference/blockers, future-information isolation, exact turn odds, multiway tie shares, cached/private reviews, old-hand reconstruction, eight distinct profiles, normalized/legal mixed size policies, position/draw/trapping behavior, multiway bluff reduction, smoothed adaptation, public-only observations, policy version compatibility, withheld bot-derived skill scores (including historical grades), game profit aggregation, saved-game persistence/idempotency, transactional deletion/rollback, stale revision protection, stable numbering, confidence handling, graph data, private-royal safeguards, exact odd-chip EV, future-street betting, multiple raise sizes and river continuation plans, snapshot consistency, live odds on all streets, weighted first-place ties, all-in/folded seats, joint card collisions, precision bounds, secret-property access guards, read-only SQL verification, result caching, concurrent/stale requests, exact recorded-deal replays across policy versions, stable replay odds/reviews, replay privacy/idempotency, original-result preservation, persisted replays across database restarts, blocker-aware 169-class range summaries, exact current-made-hand comparisons, immediate authored-policy response probabilities/traps/privacy, conservative closing-call facts, rotating position names, Easy deal selection and persistence, and all nine balanced winning categories verified independently against pokersolver.
 - **300 seeded showdown comparisons** inside the evaluator verification test against independent MIT-licensed `pokersolver`. Expected category fixtures and known odds/equity cases are independently specified, not produced by the implementation under test.
