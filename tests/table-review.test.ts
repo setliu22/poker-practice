@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import * as tableEngine from "../packages/poker/src/table";
 import {
   act,
   createTable,
   runBots,
+  replayTable,
   tableView,
   type DecisionFrame,
 } from "../packages/poker/src/table";
@@ -30,6 +32,25 @@ function frame(count = 2): DecisionFrame {
   };
 }
 describe("decision review calculations", () => {
+  it("repeats the same modeled reviews and completed-hand odds in an exact replay", () => {
+    const original = createTable("review-original", 2, 1, 0, 6, 17);
+    act(original, 0, "call");
+    original.revision++;
+    runBots(original);
+    act(original, 0, "fold");
+    original.revision++;
+    analyzeTable(original);
+    const replay = replayTable(original, "review-replay");
+    expect(replay.revision).toBe(0);
+    act(replay, 0, "call");
+    replay.revision++;
+    runBots(replay);
+    act(replay, 0, "fold");
+    replay.revision++;
+    analyzeTable(replay);
+    expect(replay.rounds).toEqual(original.rounds);
+    expect(replay.review).toEqual(original.review);
+  });
   it("enumerates river ties and divides multiway ties by the number of winners", () => {
     const f = frame(3);
     f.players[0].hole = ["2d", "3d"];
@@ -152,11 +173,11 @@ describe("decision review calculations", () => {
     analyzeTable(s);
     const call = s.rounds![0].values.find((v) => v.key === "call")!;
     expect(call.exact).toBe(true);
-    expect(call.chips).toBe(20); // half of 60 minus new call of 10
+    expect(call.chips).toBeCloseTo(20); // half of 60 minus new call of 10
     expect(s.rounds![0].callThreshold).toBeCloseTo(100 / 6);
     expect(s.rounds![0].rangeProbability.share).toBeCloseTo(50);
     const fold = s.rounds![0].comparisons!.find((c) => c.key === "fold")!;
-    expect(fold.difference).toBe(-20);
+    expect(fold.difference).toBeCloseTo(-20);
     expect(fold.margin).toBe(0);
     expect(fold.samples).toBe(0);
   });
@@ -203,7 +224,7 @@ describe("decision review calculations", () => {
     runBots(s);
     analyzeTable(s);
     const r = s.rounds![0];
-    expect(r.analysisVersion).toBe(3);
+    expect(r.analysisVersion).toBe(7);
     expect(r.comparisons).toHaveLength(r.values.length - 1);
     for (const c of r.comparisons!) {
       const chosen = r.values.find((v) => v.key === r.chosenKey)!;
@@ -251,6 +272,10 @@ describe("decision review calculations", () => {
       0.987 * 100 + 0.013 * 218,
     );
     expect(weak.find((v) => v.key === "raise")!.allFold).toBeCloseTo(98.7);
+    // Same initial bet, but fold if raised: retain100 when they fold, lose50 otherwise.
+    expect(
+      weak.find((v) => v.key === "raise-fold-to-raise")!.chips,
+    ).toBeCloseTo(0.987 * 100 - 0.013 * 50);
     const strong = evaluate(["7s", "7d"]);
     // Trips raise65%, otherwise call35%; hero loses every showdown.
     expect(strong.find((v) => v.key === "check")!.chips).toBeCloseTo(
@@ -260,6 +285,9 @@ describe("decision review calculations", () => {
       -0.35 * 50 - 0.65 * 118,
     );
     expect(strong.find((v) => v.key === "fold")!.chips).toBe(0);
+    expect(
+      strong.find((v) => v.key === "raise-fold-to-raise")!.chips,
+    ).toBeCloseTo(-50);
     expect(evaluate(["Ks", "Kh"], 999)).toEqual(weak);
     for (const v of [...weak, ...strong]) {
       expect(v.exact).toBe(true);
@@ -273,6 +301,132 @@ describe("decision review calculations", () => {
     });
     expect(evaluate(["7s", "7d"]).find((v) => v.key === "raise")!.chips).toBe(
       -50,
+    );
+  });
+});
+
+describe("decision model reliability regressions", () => {
+  it("retains the integer odd-chip payout for a legally played closing river call", () => {
+    const s = createTable("odd-chip-river", 3, 44, 0, 1, 0, 1);
+    s.players[0].hole = ["2h", "3h"];
+    s.players[1].hole = ["6h", "7h"];
+    s.players[2].hole = ["4h", "5h"];
+    s.runout = ["Tc", "Jc", "Qc", "Kc", "Ac"];
+    act(s, 0, "call");
+    act(s, 1, "fold");
+    act(s, 2, "check");
+    for (let street = 0; street < 2; street++) {
+      act(s, 2, "check");
+      act(s, 0, "check");
+    }
+    // Pot25. A legal legacy-policy bet11, call11 creates an odd pot47.
+    act(s, 2, "raise", 11);
+    const beforeCall = s.players[0].stack;
+    act(s, 0, "call");
+    expect(s.players[0].stack - beforeCall).toBe(12);
+    expect(s.players[2].payout).toBe(24); // Odd chip goes left of the button.
+    s.decisions = [s.decisions!.at(-1)!];
+    s.analysisVersion = 1;
+    analyzeTable(s);
+    const call = s.rounds![0].values.find((v) => v.key === "call")!;
+    expect(call.exact).toBe(true);
+    expect(call.chips).toBeCloseTo(12);
+    expect(s.players.reduce((sum, p) => sum + p.stack, 0)).toBe(3000);
+  });
+
+  it("simulates future opponent bets and learner folds using public observations", () => {
+    const f = frame();
+    f.street = "flop";
+    f.board = ["2c", "3d", "7h"];
+    f.players[0].hole = ["As", "Ah"];
+    f.players.forEach((p) => {
+      p.contributed = 50;
+      p.streetBet = 0;
+      p.stack = 950;
+    });
+    f.currentBet = 0;
+    f.pending = [0, 1];
+    f.policyVersion = 2;
+    const observed: tableEngine.BotObservation[] = [];
+    const spy = vi.spyOn(tableEngine, "botAction").mockImplementation((o) => {
+      observed.push(structuredClone(o));
+      if (o.seat === 1 && o.board.length === 4 && o.legal.canCheck)
+        return { action: "raise", amount: o.legal.minRaiseTo };
+      if (o.seat === 0 && o.board.length === 4 && o.legal.toCall)
+        return { action: "fold" };
+      return { action: o.legal.toCall ? "call" : "check" };
+    });
+    try {
+      const values = valueModel(
+        f,
+        new Map([[1, [{ cards: ["Ks", "Kh"], weight: 1 }]]]),
+        73,
+      );
+      expect(values.find((v) => v.key === "check")!.chips).toBe(0);
+      expect(observed.some((o) => o.seat === 1 && o.board.length === 4)).toBe(
+        true,
+      );
+      const heroTurn = observed.find(
+        (o) => o.seat === 0 && o.board.length === 4,
+      )!;
+      expect(heroTurn.botId).toBe("theo");
+      expect(heroTurn.hole).toEqual(["As", "Ah"]);
+      expect(heroTurn.board).toHaveLength(4);
+      expect(heroTurn).not.toHaveProperty("players");
+      expect(heroTurn).not.toHaveProperty("runout");
+      expect(heroTurn).not.toHaveProperty("ranges");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("compares distinct legal sizes plus explicitly labeled river bet/fold plans", () => {
+    const f = frame();
+    f.players[0].hole = ["2d", "3d"];
+    f.players.forEach((p) => {
+      p.contributed = 50;
+      p.streetBet = 0;
+      p.stack = 950;
+    });
+    f.pending = [0, 1];
+    f.action = "raise";
+    f.amount = 75;
+    const values = valueModel(
+      f,
+      new Map([[1, [{ cards: ["4d", "5d"], weight: 1 }]]]),
+      1,
+    );
+    expect(values.find((v) => v.key === "raise")!.label).toBe(
+      "Bet 75; call a re-raise",
+    );
+    for (const amount of [10, 50, 100])
+      expect(values.some((v) => v.key === `raise-${amount}`)).toBe(true);
+    expect(values.some((v) => v.key === "raise-fold-to-raise")).toBe(true);
+    expect(new Set(values.map((v) => v.key)).size).toBe(values.length);
+    expect(values.every((v) => Number.isFinite(v.chips))).toBe(true);
+  });
+
+  it("keeps preflop groups tied to their own decision board after later cards and folds", () => {
+    const s = createTable("range-snapshot", 2, 1);
+    act(s, 0, "call");
+    runBots(s);
+    act(s, 0, "fold");
+    analyzeTable(s);
+    const preflop = s.rounds![0];
+    expect(preflop.street).toBe("preflop");
+    expect(preflop.board).toEqual([]);
+    expect(preflop.opponents[0].combinations).toBe(1225);
+    expect(preflop.opponents[0].groups.map((g) => g.name).sort()).toEqual([
+      "Offsuit",
+      "Pocket pair",
+      "Suited",
+    ]);
+    expect(preflop.actualCards![0].hand).toBe("Preflop");
+    const broken = structuredClone(s);
+    broken.rounds = [];
+    broken.decisions![0].board = ["2c", "3d", "7h", "9s"];
+    expect(() => analyzeTable(broken)).toThrow(
+      "street does not match its public board",
     );
   });
 });

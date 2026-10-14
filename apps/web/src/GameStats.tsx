@@ -86,6 +86,9 @@ export function GameStats({
                   <span className="quiet">
                     {g.players} players · {g.hands}{" "}
                     {g.hands === 1 ? "hand" : "hands"}
+                    {g.replayOf
+                      ? ` · Replay of hand ${g.replayOf.handNumber}`
+                      : ""}
                     {g.id === currentId ? " · At table" : ""}
                   </span>
                   <time className="quiet" dateTime={g.startedAt}>
@@ -119,6 +122,12 @@ export function GameStats({
               <div className="game-detail-heading">
                 <div>
                   <h2>Game {current.gameNumber}</h2>
+                  {current.replayOf && (
+                    <p className="quiet">
+                      Replay of hand {current.replayOf.handNumber} · original
+                      result kept separately
+                    </p>
+                  )}
                   <p className="quiet">
                     {current.players} players ·{" "}
                     {current.inProgress
@@ -153,87 +162,68 @@ export function GameStats({
                   <strong>{current.hands}</strong>
                 </div>
                 <div>
-                  <span>Decision score · model</span>
-                  <strong>
-                    {current.score === null ? "—" : `${current.score}/100`}
-                  </strong>
-                  <small>
-                    {current.scoredDecisions} scored ·{" "}
-                    {current.unscoredDecisions} unscored
-                  </small>
+                  <span>Decisions reviewed</span>
+                  <strong>{current.decisions}</strong>
                 </div>
+                {current.modelRating && (
+                  <div>
+                    <span>Model agreement</span>
+                    <strong>
+                      {current.modelRating.score === null
+                        ? current.modelRating.inconclusiveDecisions > 0
+                          ? "Inconclusive"
+                          : "Not rated"
+                        : `${current.modelRating.score.toFixed(1)} / 100`}
+                    </strong>
+                  </div>
+                )}
               </div>
               <p className="quiet stats-caption">
-                Completed hands only. Scores compare your postflop choices with
-                tested alternatives under the bot model.
+                Completed hands only. Chip profit records results; it does not
+                measure decision quality.
               </p>
-              {current.currentHand >
-                current.hands + (current.inProgress ? 1 : 0) && (
-                <p className="quiet">
-                  Earlier hands from before tracking was added are unavailable.
-                  Profit starts with the first recorded hand.
-                </p>
-              )}
-              {current.unscoredDecisions > 0 && (
-                <p className="quiet">
-                  Unscored choices had too much simulation uncertainty or used
-                  older analysis. They do not raise or lower your score.
+              {!current.replayOf &&
+                current.currentHand >
+                  current.hands + (current.inProgress ? 1 : 0) && (
+                  <p className="quiet">
+                    Earlier hands from before tracking was added are
+                    unavailable. Profit starts with the first recorded hand.
+                  </p>
+                )}
+              <p className="quiet">Poker skill is not scored.</p>
+              {current.modelRating && (
+                <p className="quiet model-rating-coverage">
+                  Model agreement averages {current.modelRating.ratedDecisions}{" "}
+                  rated decisions. {current.modelRating.inconclusiveDecisions}{" "}
+                  inconclusive and {current.modelRating.unavailableDecisions}{" "}
+                  unrated decisions are excluded. This uses information
+                  available at each move, not the hand’s result, and measures
+                  agreement with the bot model rather than general strategy.
                 </p>
               )}
               <div className="stats-charts">
                 <StatsChart title="Profit over time" points={trends.profit} />
-                <StatsChart
-                  title="Decision score over time"
-                  points={trends.score}
-                  score
-                />
               </div>
-              {!!current.streets.length && (
-                <div className="street-scores" aria-label="Scores by street">
-                  {current.streets.map((s) => (
-                    <div key={s.street}>
-                      <span>{s.street}</span>
-                      <strong>{s.score}/100</strong>
-                      <small>{s.decisions} decisions</small>
-                    </div>
-                  ))}
-                </div>
-              )}
               <details className="score-explainer">
-                <summary>About the decision score</summary>
+                <summary>About the estimates</summary>
                 <p>
-                  The score uses your cards, the board, and estimated bot ranges
-                  when you acted. Winning or losing the hand does not change the
-                  score. Preflop and unfinished hands are excluded.
+                  Decision reviews compare estimated chip returns under the
+                  stated bot rules and continuation assumptions. These estimates
+                  are not validated poker lessons or skill grades. Smaller
+                  sampling errors and exact arithmetic do not establish that the
+                  opponent model is realistic. The new model-agreement score
+                  uses a disclosed display scale and excludes inconclusive
+                  comparisons. Earlier poker-skill scores remain hidden.
                 </p>
                 <p>
-                  We compare choices on the same sampled deals, or calculate
-                  their returns exactly where possible. Each pot-sized expected
-                  loss reduces the score from 100 toward 0. Wide or inconclusive
-                  intervals stay unscored. Game scores average assessed
-                  decisions; the graph skips hands without a score.
-                </p>
-                <p>
-                  A 100 means no estimated loss against tested alternatives with
-                  sufficiently narrow sampling uncertainty. It does not mean
-                  perfect poker or a realistic opponent model. The model
-                  simulates the current betting round, assumes you call further
-                  raises, and checks later streets through. It can miss future
-                  betting costs and better bet sizes.
+                  Showdown odds estimate wins and ties against possible hands.
+                  They do not predict folds or automatically recommend calling
+                  or raising. Winning one hand does not prove that its decisions
+                  were good.
                 </p>
                 <p>
                   Stacks reset to 1,000 each hand. Profit adds completed hand
                   gains and losses.
-                </p>
-                <p>
-                  For a sampled comparison to receive a score, its error margin
-                  must be no wider than 10 chips or 10% of the pot, whichever is
-                  larger. A good-looking choice is also withheld if its interval
-                  still allows a loss larger than that threshold. Score = 100 ×
-                  (1 − estimated loss / pot), bounded from 0 to 100, with a
-                  minimum 10-chip pot scale. This precision rule is a trainer
-                  setting, not a poker law. Skipped decisions mean the score
-                  covers only part of your play.
                 </p>
               </details>
               {!!current.history.length && (
@@ -245,7 +235,6 @@ export function GameStats({
                         <tr>
                           <th scope="col">Hand</th>
                           <th scope="col">Profit</th>
-                          <th scope="col">Score</th>
                           <th scope="col">Completed</th>
                         </tr>
                       </thead>
@@ -254,7 +243,6 @@ export function GameStats({
                           <tr key={h.handNumber}>
                             <th scope="row">{h.handNumber}</th>
                             <td>{formatChips(h.profit)}</td>
-                            <td>{h.score === null ? "—" : `${h.score}/100`}</td>
                             <td>
                               <time dateTime={h.completedAt}>
                                 {new Date(h.completedAt).toLocaleString(

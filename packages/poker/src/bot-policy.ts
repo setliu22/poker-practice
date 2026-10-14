@@ -298,6 +298,7 @@ export function handFeatures(hole: string[], board: string[]) {
       monster: pair && high >= 12,
       playsBoard: false,
       lockedBoard: false,
+      royalFlush: false,
     };
   }
   const h = best([...hole, ...board]),
@@ -341,7 +342,8 @@ export function handFeatures(hole: string[], board: string[]) {
           : 0.15 + (high / 14) * 0.1;
   } else strength = 0.09 + (high / 14) * 0.12;
   const texture = boardFeatures(board),
-    playsBoard = board.length === 5 && compare(h, best(board)) === 0;
+    playsBoard = board.length === 5 && compare(h, best(board)) === 0,
+    royalFlush = h.category === 8 && h.kickers[0] === 14;
   // These shared board hands cannot lose to any legal two-card holding.
   // An ace-high straight is protected only when no flush can be completed.
   const lockedBoard =
@@ -404,6 +406,7 @@ export function handFeatures(hole: string[], board: string[]) {
     monster: strength >= 0.8 && !playsBoard,
     playsBoard,
     lockedBoard,
+    royalFlush,
   };
 }
 export function contextualDistribution(
@@ -574,7 +577,11 @@ export function contextualDistribution(
       overfold * (f.strength < 0.35 ? 1 : 0);
     if (f.playsBoard) raiseProbability *= 0.03;
   }
-  callProbability = f.lockedBoard ? 1 : clamp(callProbability, 0.005, 0.995);
+  // A made royal flush cannot lose, even with community cards still to come.
+  // Keep value raises available when it uses private cards; a shared locked
+  // board remains a check/call because no opponent can have a weaker hand.
+  callProbability =
+    f.lockedBoard || f.royalFlush ? 1 : clamp(callProbability, 0.005, 0.995);
   raiseProbability =
     o.legal.canRaise && !f.lockedBoard
       ? clamp(raiseProbability, 0.002, 0.94)

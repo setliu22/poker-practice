@@ -35,28 +35,20 @@ function round(gap = 30, margin = 5, pot = 100): DecisionReview {
   } as DecisionReview;
 }
 describe("game decision scoring", () => {
-  it("scores independently known pot-normalized regret only when sufficiently precise", () => {
-    expect(scoreDecision(round())).toMatchObject({
-      street: "flop",
-      loss: 30,
-      score: 70,
-      status: "scored",
-    });
-    expect(scoreDecision(round(8))).toMatchObject({
-      score: null,
-      loss: null,
-      status: "inconclusive",
-    });
-    expect(scoreDecision(round(200, 0))).toMatchObject({
-      street: "flop",
-      loss: 200,
-      score: 0,
-      status: "scored",
-    });
-    expect(scoreDecision(round(5, 0, 0))?.score).toBe(50);
+  it("never converts precise bot-model estimates into poker-skill grades", () => {
+    for (const r of [round(), round(8), round(200, 0), round(5, 0, 0)])
+      expect(scoreDecision(r)).toMatchObject({
+        street: "flop",
+        loss: null,
+        score: null,
+        status: "model-only",
+      });
   });
-  it("excludes preflop and unreviewable choices and ignores hindsight", () => {
-    expect(scoreDecision({ ...round(), street: "preflop" })).toBeNull();
+  it("keeps preflop reviews model-only, excludes unreviewable choices and ignores hindsight", () => {
+    expect(scoreDecision({ ...round(), street: "preflop" })).toMatchObject({
+      status: "model-only",
+      score: null,
+    });
     expect(scoreDecision({ ...round(), chosenKey: "missing" })).toBeNull();
     expect(scoreDecision({ ...round(), values: [] })).toBeNull();
     expect(
@@ -74,7 +66,7 @@ describe("game decision scoring", () => {
       }),
     ).toEqual(scoreDecision(round()));
   });
-  it("aggregates completed hands, profit and street scores without double counting or including unfinished hands", () => {
+  it("aggregates completed hands and profit without presenting model outcomes as scores", () => {
     const db = openDatabase(":memory:");
     try {
       const s = createTable("game", 2, 1);
@@ -104,15 +96,14 @@ describe("game decision scoring", () => {
       const game = gameStats(db)[0];
       expect(game.hands).toBe(2);
       expect(game.profit).toBe(20);
-      expect(game.score).toBe(70);
-      expect(game.decisions).toBe(3);
-      expect(game.modelLoss).toBe(90);
-      expect(game.streets).toEqual([
-        { street: "flop", score: 70, decisions: 1 },
-        { street: "turn", score: 100, decisions: 1 },
-        { street: "river", score: 40, decisions: 1 },
-      ]);
+      expect(game.score).toBeNull();
+      expect(game.decisions).toBe(4);
+      expect(game.scoredDecisions).toBe(0);
+      expect(game.unscoredDecisions).toBe(4);
+      expect(game.modelLoss).toBe(0);
+      expect(game.streets).toEqual([]);
       expect(game.history.map((h) => h.profit)).toEqual([-20, 40]);
+      expect(game.history.every((h) => h.score === null)).toBe(true);
     } finally {
       db.close();
     }
@@ -135,7 +126,7 @@ describe("game decision scoring", () => {
         hands: 1,
         profit: -5,
         score: null,
-        decisions: 0,
+        decisions: 1,
       });
       const next = await request(app)
         .post(`/api/tables/${first.body.id}/next`)
@@ -301,40 +292,53 @@ describe("game management", () => {
   });
 });
 
-it("does not include obsolete optimistic scores in game averages or charts", () => {
-  const db = openDatabase(":memory:");
-  try {
-    const state = createTable("legacy-score", 2, 1);
-    db.prepare("INSERT INTO bot_tables VALUES(?,?)").run(
-      state.id,
-      JSON.stringify(state),
-    );
-    db.prepare("INSERT INTO bot_games VALUES(?,?)").run(
-      state.id,
-      "2026-10-08T00:00:00Z",
-    );
-    db.prepare("INSERT INTO bot_hand_stats VALUES(?,?,?)").run(
-      state.id,
-      1,
-      JSON.stringify({
-        handNumber: 1,
+it.each([undefined, 1, 2, 3, 4])(
+  "hides historical score version %s without needing its review frames",
+  (scoringVersion) => {
+    const db = openDatabase(":memory:");
+    try {
+      const state = createTable("legacy-score", 2, 1);
+      db.prepare("INSERT INTO bot_tables VALUES(?,?)").run(
+        state.id,
+        JSON.stringify(state),
+      );
+      db.prepare("INSERT INTO bot_games VALUES(?,?)").run(
+        state.id,
+        "2026-10-08T00:00:00Z",
+      );
+      db.prepare("INSERT INTO bot_hand_stats VALUES(?,?,?)").run(
+        state.id,
+        1,
+        JSON.stringify({
+          scoringVersion,
+          handNumber: 1,
+          profit: 20,
+          completedAt: "2026-10-08T01:00:00Z",
+          decisions: [
+            {
+              street: "flop",
+              score: 100,
+              loss: 0,
+              status: scoringVersion ? "scored" : undefined,
+            },
+          ],
+        }),
+      );
+      expect(gameStats(db)[0]).toMatchObject({
         profit: 20,
-        completedAt: "2026-10-08T01:00:00Z",
-        decisions: [{ street: "flop", score: 100, loss: 0 }],
-      }),
-    );
-    expect(gameStats(db)[0]).toMatchObject({
-      profit: 20,
-      score: null,
-      decisions: 1,
-      scoredDecisions: 0,
-      unscoredDecisions: 1,
-    });
-    expect(gameStats(db)[0].history[0]).toMatchObject({
-      score: null,
-      decisions: [{ status: "legacy", score: null, loss: null }],
-    });
-  } finally {
-    db.close();
-  }
-});
+        score: null,
+        decisions: 1,
+        scoredDecisions: 0,
+        unscoredDecisions: 1,
+      });
+      expect(gameStats(db)[0].history[0]).toMatchObject({
+        score: null,
+        decisions: [{ status: "model-only", score: null, loss: null }],
+      });
+      expect(gameStats(db)[0].modelLoss).toBe(0);
+      expect(gameStats(db)[0].streets).toEqual([]);
+    } finally {
+      db.close();
+    }
+  },
+);

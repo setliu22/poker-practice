@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import type { TableState } from "../../../packages/poker/src/table";
+import { decisionRating } from "../../../packages/poker/src/decision-rating";
 import type {
   DecisionReview,
   DecisionStat,
@@ -7,103 +8,40 @@ import type {
   HandStat,
 } from "../../../packages/shared/src/table";
 
-// Only information available when acting contributes. Actual revealed cards never grade a decision.
-export function scoreDecision(round: DecisionReview): DecisionStat | null {
-  if (round.street === "preflop" || !round.values.length) return null;
-  const chosen = round.values.find((v) => v.key === round.chosenKey);
-  if (!chosen) return null;
-  const unscored = (
-    status: "legacy" | "inconclusive",
-    reason: string,
-  ): DecisionStat => ({
-    street: round.street,
+const SCORING_VERSION = 4;
+const MODEL_ONLY_REASON =
+  "These chip estimates depend on unvalidated bot-response and continuation assumptions. They are not reliable measures of poker skill, even when sampling is precise or the arithmetic is exact.";
+
+function modelOnlyDecision(street: string): DecisionStat {
+  return {
+    street,
     score: null,
     loss: null,
-    status,
-    reason,
-  });
-  // Separate intervals around two averages cannot establish the uncertainty of their difference.
-  if (
-    (round.analysisVersion !== 2 && round.analysisVersion !== 3) ||
-    !round.comparisons
-  )
-    return unscored(
-      "legacy",
-      "This review predates paired action comparisons.",
-    );
-  const alternatives = round.values.filter((v) => v.key !== chosen.key);
-  const comparisons = round.comparisons;
-  if (!alternatives.length) return null;
-  const valid =
-    comparisons.length === alternatives.length &&
-    alternatives.every((v) => {
-      const matches = comparisons.filter((c) => c.key === v.key);
-      if (matches.length !== 1) return false;
-      const c = matches[0];
-      return (
-        Number.isFinite(c.difference) &&
-        Number.isFinite(c.margin) &&
-        c.margin >= 0 &&
-        ((Number.isInteger(c.samples) && c.samples >= 100) ||
-          (c.samples === 0 && c.margin === 0 && chosen.exact && v.exact))
-      );
-    });
-  if (!valid || !Number.isFinite(round.pot) || round.pot < 0)
-    return unscored(
-      "inconclusive",
-      "There is not enough paired simulation evidence to score this choice.",
-    );
-  const scale = Math.max(10, round.pot);
-  const material = Math.max(10, round.pot * 0.1);
-  const loss = Math.max(0, ...comparisons.map((c) => c.difference));
-  const upperLoss = Math.max(
-    0,
-    ...comparisons.map((c) => c.difference + c.margin),
-  );
-  // Broad uncertainty must never improve a score. Near a good-looking choice,
-  // withhold the score if sampling could still conceal a meaningful missed value.
-  if (
-    comparisons.some((c) => c.margin > material) ||
-    (loss <= material && upperLoss > material)
-  )
-    return unscored(
-      "inconclusive",
-      "Sampling uncertainty still permits a materially different action assessment.",
-    );
-  return {
-    street: round.street,
-    loss,
-    score: Math.max(0, 100 * (1 - loss / scale)),
-    status: "scored",
-    reason:
-      "Estimated regret within the trainer's one-round opponent model; not a measure of real-world optimal play.",
+    status: "model-only",
+    reason: MODEL_ONLY_REASON,
   };
 }
-const isScored = (
-  d: DecisionStat,
-): d is DecisionStat & { score: number; loss: number } =>
-  d.status === "scored" && d.score !== null && d.loss !== null;
-const average = (items: DecisionStat[]) => {
-  const scored = items.filter(isScored);
-  return scored.length
-    ? Math.round(scored.reduce((sum, d) => sum + d.score, 0) / scored.length)
-    : null;
-};
+
+// Revealed cards and precise arithmetic cannot validate strategic assumptions.
+// Keep the model comparison in the review, but do not turn it into a skill score.
+export function scoreDecision(round: DecisionReview): DecisionStat | null {
+  if (!round.values.length) return null;
+  const chosen = round.values.find((v) => v.key === round.chosenKey);
+  if (!chosen) return null;
+  return {
+    ...modelOnlyDecision(round.street),
+    ...(round.analysisVersion === 7
+      ? { modelRating: decisionRating(round) }
+      : {}),
+  };
+}
 export function saveHandStats(db: Database.Database, state: TableState) {
   if (!state.complete) return;
   const view = state.rounds ?? [];
-  const postflop = view.filter((r) => r.street !== "preflop");
-  const scoringVersion = postflop.every(
-    (r) =>
-      (r.analysisVersion === 2 || r.analysisVersion === 3) &&
-      Array.isArray(r.comparisons),
-  )
-    ? postflop.some((r) => r.analysisVersion === 2)
-      ? 2
-      : 3
-    : 1;
   const hand: HandStat = {
-    scoringVersion,
+    scoringVersion: SCORING_VERSION,
+    modelRatingVersion: 1,
+    modelAnalysisVersion: 7,
     handNumber: state.handNumber,
     profit: state.players[0].stack - 1000,
     completedAt: new Date().toISOString(),
@@ -127,10 +65,19 @@ export function saveHandStats(db: Database.Database, state: TableState) {
     }
     const previous = JSON.parse(existing.data) as HandStat;
     if (
-      (previous.scoringVersion ?? 1) < scoringVersion &&
-      scoringVersion >= 2 &&
-      (view.some((r) => r.street !== "preflop") ||
-        previous.decisions.length === 0)
+      (previous.scoringVersion ?? 1) < SCORING_VERSION ||
+      previous.decisions.some(
+        (d) => d.status !== "model-only" || d.score !== null || d.loss !== null,
+      ) ||
+      (hand.decisions.length > 0 &&
+        (previous.decisions.length !== hand.decisions.length ||
+          (hand.decisions.some((d) => d.modelRating) &&
+            previous.modelAnalysisVersion !== 7) ||
+          hand.decisions.some(
+            (d, i) =>
+              JSON.stringify(d.modelRating) !==
+              JSON.stringify(previous.decisions[i]?.modelRating),
+          )))
     ) {
       // A refreshed review may replace obsolete grading, never the historical outcome/date.
       db.prepare(
@@ -138,8 +85,12 @@ export function saveHandStats(db: Database.Database, state: TableState) {
       ).run(
         JSON.stringify({
           ...previous,
-          decisions: hand.decisions,
-          scoringVersion,
+          decisions: hand.decisions.length
+            ? hand.decisions
+            : previous.decisions.map((d) => modelOnlyDecision(d.street)),
+          scoringVersion: SCORING_VERSION,
+          modelRatingVersion: 1,
+          modelAnalysisVersion: 7,
         }),
         state.id,
         state.handNumber,
@@ -152,6 +103,7 @@ export function gameStats(db: Database.Database): GameStats[] {
     .prepare(
       `SELECT t.id,g.started_at,n.number,
       json_extract(t.state,'$.revision') AS revision,
+      json_extract(t.state,'$.replayOf') AS replay_of,
       json_array_length(t.state,'$.players') AS players,
       json_extract(t.state,'$.handNumber') AS hand_number,
       json_extract(t.state,'$.complete') AS complete
@@ -160,6 +112,7 @@ export function gameStats(db: Database.Database): GameStats[] {
     .all() as {
     id: string;
     revision: number;
+    replay_of: string | null;
     players: number;
     hand_number: number;
     complete: number;
@@ -179,43 +132,57 @@ export function gameStats(db: Database.Database): GameStats[] {
   return rows.map((row) => {
     const hands = (histories.get(row.id) ?? []).map((hand) => ({
       ...hand,
-      decisions: hand.decisions.map((d): DecisionStat =>
-        d.status
-          ? d
-          : {
-              ...d,
-              status: "legacy",
-              score: null,
-              loss: null,
-              reason: "This hand predates paired action comparisons.",
-            },
-      ),
+      scoringVersion: SCORING_VERSION,
+      // Historical scores must be hidden even when their frames no longer exist.
+      decisions: hand.decisions.map((d) => ({
+        ...modelOnlyDecision(d.street),
+        ...(hand.modelRatingVersion === 1 &&
+        hand.modelAnalysisVersion === 7 &&
+        d.modelRating?.version === 1
+          ? { modelRating: d.modelRating }
+          : {}),
+      })),
     }));
     const decisions = hands.flatMap((h) => h.decisions);
+    const ratings = decisions.flatMap((d) =>
+      d.modelRating ? [d.modelRating] : [],
+    );
+    const rated = ratings.filter((r) => r.score !== null);
     return {
       id: row.id,
       gameNumber: row.number ?? 0,
       revision: row.revision,
+      ...(row.replay_of ? { replayOf: JSON.parse(row.replay_of) } : {}),
       startedAt: row.started_at,
       players: row.players,
       hands: hands.length,
       currentHand: row.hand_number,
       inProgress: !row.complete,
       profit: hands.reduce((sum, h) => sum + h.profit, 0),
-      score: average(decisions),
+      score: null,
       decisions: decisions.length,
-      scoredDecisions: decisions.filter(isScored).length,
-      unscoredDecisions: decisions.filter((d) => !isScored(d)).length,
-      modelLoss: decisions.filter(isScored).reduce((sum, d) => sum + d.loss, 0),
-      streets: ["flop", "turn", "river"].flatMap((street) => {
-        const items = decisions.filter(
-          (d) => d.street === street && isScored(d),
-        );
-        return items.length
-          ? [{ street, score: average(items)!, decisions: items.length }]
-          : [];
-      }),
-      history: hands.map((h) => ({ ...h, score: average(h.decisions) })),
+      scoredDecisions: 0,
+      unscoredDecisions: decisions.length,
+      modelLoss: 0,
+      streets: [],
+      history: hands.map((h) => ({ ...h, score: null })),
+      ...(ratings.length
+        ? {
+            modelRating: {
+              score: rated.length
+                ? rated.reduce((sum, r) => sum + r.score!, 0) / rated.length
+                : null,
+              ratedDecisions: rated.length,
+              inconclusiveDecisions: ratings.filter(
+                (r) => r.status === "inconclusive",
+              ).length,
+              unavailableDecisions:
+                decisions.length -
+                rated.length -
+                ratings.filter((r) => r.status === "inconclusive").length,
+            },
+          }
+        : {}),
     };
   });
 }

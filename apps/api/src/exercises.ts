@@ -16,6 +16,7 @@ import {
   type Mode,
 } from "../../../packages/shared/src/index";
 import { scenarios } from "./scenarios";
+import { balancedShowdown } from "../../../packages/poker/src/balanced-deals";
 export type Specification = {
   exercise: Exercise;
   seed: number;
@@ -27,6 +28,7 @@ export function generate(
   id: string,
   street: "turn" | "river" = "river",
   targetTag?: string,
+  showdownStyle: "random" | "balanced" = "random",
 ): Specification {
   if (mode === "equity" && targetTag === "Flush") street = "turn";
   const rng = random(seed);
@@ -43,15 +45,20 @@ export function generate(
     exercise = { ...exercise, ...chosen.s.exercise };
   } else if (mode === "who-wins") {
     const cards = deal(seed, 9);
+    const balanced =
+      showdownStyle === "balanced" ? balancedShowdown(seed) : undefined;
     exercise = {
       ...exercise,
-      sourceId: `deal-${seed}`,
-      hero: cards.slice(0, 2),
-      villain: cards.slice(2, 4),
-      board: cards.slice(4),
+      sourceId: `${balanced ? "balanced-deal" : "deal"}-${seed}`,
+      hero: balanced?.hero ?? cards.slice(0, 2),
+      villain: balanced?.villain ?? cards.slice(2, 4),
+      board: balanced?.board ?? cards.slice(4),
+      dealStyle: showdownStyle,
       tags: ["Range comparison"],
       context: [
-        "A fresh random deal from a full deck. Compare each player’s best five cards, not just their hole cards.",
+        balanced
+          ? "A fresh training deal with each winning hand category equally represented, including four of a kind and straight flushes. These are not the natural frequencies of random poker deals. Compare each player’s best five cards."
+          : "A fresh random deal from a full deck. Compare each player’s best five cards, not just their hole cards.",
       ],
     };
     exercise.question = "Who wins at showdown?";

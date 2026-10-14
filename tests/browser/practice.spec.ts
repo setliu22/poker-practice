@@ -6,6 +6,7 @@ test("complete exercise, show feedback, update progress and start next", async (
   page,
 }) => {
   await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Who wins at showdown?" }),
   ).toBeVisible();
@@ -42,6 +43,7 @@ test("complete exercise, show feedback, update progress and start next", async (
 });
 test("keyboard answers and focus moves to feedback", async ({ page }) => {
   await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
   const radio = page.getByRole("radio", { name: "Tie", exact: true });
   await radio.focus();
   await page.keyboard.press("Space");
@@ -56,6 +58,7 @@ test("all modes work and mobile layout stays within viewport", async ({
   page,
 }) => {
   await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
   await page.getByRole("button", { name: "Pot odds", exact: true }).click();
   await page.getByLabel("Required equity", { exact: true }).fill("25");
   await page.getByRole("button", { name: "Check my answer" }).click();
@@ -107,6 +110,7 @@ test("clearing progress requires confirmation and can be cancelled", async ({
   page,
 }) => {
   await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
   await page.getByRole("radio").first().check();
   await page.getByRole("button", { name: "Check my answer" }).click();
   await expect(
@@ -138,6 +142,7 @@ test("practice needs no external network and cards remain visible", async ({
     return route.abort();
   });
   await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Who wins at showdown?" }),
   ).toBeVisible();

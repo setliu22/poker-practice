@@ -19,6 +19,7 @@ export const createSchema = z
     seed: z.number().int().min(0).max(4294967295).optional(),
     targetWeak: z.boolean().default(false),
     street: z.enum(["river", "turn"]).default("river"),
+    showdownStyle: z.enum(["random", "balanced"]).default("random"),
   })
   .strict();
 export const answerSchema = z
@@ -56,6 +57,7 @@ export type Exercise = {
   limitations?: string;
   assumptions?: string[];
   selection?: string;
+  dealStyle?: "random" | "balanced";
 };
 export type Feedback = {
   kind: "exact" | "estimate" | "illustrative";
@@ -126,5 +128,6 @@ export const exerciseSchema = z
     limitations: z.string().optional(),
     assumptions: z.array(z.string()).optional(),
     selection: z.string().optional(),
+    dealStyle: z.enum(["random", "balanced"]).optional(),
   })
   .strict();

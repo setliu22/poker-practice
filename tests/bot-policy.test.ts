@@ -62,6 +62,81 @@ const facing = {
   maxRaiseTo: 900,
 };
 describe("contextual bot personalities", () => {
+  it.each(personalities.map((p) => [p.id]))(
+    "%s never folds a private royal flush to an all-in on any postflop street",
+    (botId) => {
+      for (const board of [
+        ["Qs", "Js", "Ts"],
+        ["Qs", "Js", "Ts", "2d"],
+        ["Qs", "Js", "Ts", "2d", "3c"],
+      ]) {
+        const o = observation({
+          botId,
+          hole: ["As", "Ks"],
+          board,
+          pot: 1100,
+          currentBet: 900,
+          legal: {
+            toCall: 900,
+            canCheck: false,
+            canRaise: false,
+            minRaiseTo: 1800,
+            maxRaiseTo: 900,
+          },
+        });
+        expect(handFeatures(o.hole, board).royalFlush).toBe(true);
+        expect(call(o)).toBe(1);
+        expect(
+          botDistribution(o).find((v) => v.action === "fold")?.probability,
+        ).toBe(0);
+        for (const seed of [1, 42, 150, 981])
+          expect(botAction(o, seed).action).toBe("call");
+      }
+    },
+  );
+  it("keeps value raises available with a private royal flush", () => {
+    const o = observation({
+      hole: ["As", "Ks"],
+      board: ["Qs", "Js", "Ts", "2d", "3c"],
+      currentBet: 50,
+      legal: facing,
+    });
+    expect(handFeatures(o.hole, o.board).lockedBoard).toBe(false);
+    expect(raise(o)).toBeGreaterThan(0);
+    expect(call(o) + raise(o)).toBeCloseTo(1, 12);
+    expect(
+      botDistribution(o).find((v) => v.action === "fold")?.probability,
+    ).toBe(0);
+  });
+  it("does not treat a beatable straight flush or a nut-flush draw as a royal flush", () => {
+    for (const [hole, board] of [
+      // An opponent holding As Ks can beat this queen-high straight flush.
+      [
+        ["9s", "8s"],
+        ["Qs", "Js", "Ts", "2d", "3c"],
+      ],
+      [
+        ["As", "Ks"],
+        ["Qs", "Js", "2d", "3c"],
+      ],
+    ]) {
+      const o = observation({
+        hole,
+        board,
+        pot: 1100,
+        currentBet: 900,
+        legal: {
+          toCall: 900,
+          canCheck: false,
+          canRaise: false,
+          minRaiseTo: 1800,
+          maxRaiseTo: 900,
+        },
+      });
+      expect(handFeatures(hole, board).royalFlush).toBe(false);
+      expect(call(o)).toBeLessThan(1);
+    }
+  });
   it("never folds an unbeatable shared straight or quads, but does not lock a flush-vulnerable straight", () => {
     for (const board of [
       ["Tc", "Jd", "Qh", "Ks", "Ac"],

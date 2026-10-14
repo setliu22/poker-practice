@@ -18,5 +18,21 @@ export function openDatabase(
   db.exec(
     readFileSync(resolve("apps/api/migrations/004_game_numbers.sql"), "utf8"),
   );
+  db.exec(
+    readFileSync(resolve("apps/api/migrations/005_solver_charts.sql"), "utf8"),
+  );
+  db.exec(
+    readFileSync(resolve("apps/api/migrations/006_learning.sql"), "utf8"),
+  );
+  db.exec(
+    readFileSync(resolve("apps/api/migrations/007_read_lesson.sql"), "utf8"),
+  );
+
+  db.exec(
+    readFileSync(
+      resolve("apps/api/migrations/008_generated_decisions.sql"),
+      "utf8",
+    ),
+  );
   return db;
 }

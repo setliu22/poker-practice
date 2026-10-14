@@ -1,3 +1,4 @@
+import { Learn, LearningProgressSummary } from "./Learn";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -11,6 +12,7 @@ import {
 import "./styles.css";
 import { Cards } from "./Cards";
 import { BotPractice } from "./BotPractice";
+import { OpeningChartLibrary } from "./PreflopGuide";
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch("/api" + path, {
     ...options,
@@ -34,8 +36,8 @@ const descriptions: Record<Mode, string> = {
 };
 function App() {
   const [page, setPage] = useState<
-    "Practice" | "Bot table" | "Progress" | "Reference"
-  >("Practice");
+    "Learn" | "Practice" | "Bot table" | "Progress" | "Reference"
+  >("Learn");
   return (
     <>
       <a className="skip" href="#main">
@@ -49,24 +51,26 @@ function App() {
           <span>Poker Practice</span>
         </div>
         <nav aria-label="Main navigation">
-          {(["Practice", "Bot table", "Progress", "Reference"] as const).map(
-            (p) => (
-              <button
-                key={p}
-                aria-current={page === p ? "page" : undefined}
-                onClick={() => setPage(p)}
-              >
-                {p}
-              </button>
-            ),
-          )}
+          {(
+            ["Learn", "Practice", "Bot table", "Progress", "Reference"] as const
+          ).map((p) => (
+            <button
+              key={p}
+              aria-current={page === p ? "page" : undefined}
+              onClick={() => setPage(p)}
+            >
+              {p}
+            </button>
+          ))}
         </nav>
         <span className="local-label">
           <span aria-hidden="true">●</span> Local learner
         </span>
       </header>
       <main id="main">
-        {page === "Bot table" ? (
+        {page === "Learn" ? (
+          <Learn />
+        ) : page === "Bot table" ? (
           <BotPractice />
         ) : page === "Practice" ? (
           <Practice />
@@ -85,6 +89,11 @@ function App() {
 function Practice() {
   const [mode, setMode] = useState<Mode>("who-wins"),
     [street, setStreet] = useState<"river" | "turn">("river"),
+    [showdownStyle, setShowdownStyle] = useState<"random" | "balanced">(() =>
+      localStorage.getItem("poker-practice-showdown-style") === "balanced"
+        ? "balanced"
+        : "random",
+    ),
     [weak, setWeak] = useState(false);
   const [exercise, setExercise] = useState<Exercise | null>(null),
     [answer, setAnswer] = useState(""),
@@ -98,7 +107,12 @@ function Practice() {
   const started = useRef(Date.now()),
     busy = useRef(false),
     feedbackRef = useRef<HTMLElement>(null);
-  async function next(nextMode = mode, nextStreet = street, nextWeak = weak) {
+  async function next(
+    nextMode = mode,
+    nextStreet = street,
+    nextWeak = weak,
+    nextStyle = showdownStyle,
+  ) {
     if (busy.current) return;
     busy.current = true;
     setState("loading");
@@ -115,6 +129,7 @@ function Practice() {
           mode: nextMode,
           street: nextStreet,
           targetWeak: nextWeak,
+          showdownStyle: nextStyle,
         }),
       });
       setExercise(e);
@@ -230,6 +245,30 @@ function Practice() {
           aria-busy={locked}
           aria-label="Current exercise"
         >
+          {mode === "who-wins" && (
+            <div className="street-control">
+              <label htmlFor="showdown-style">Showdown deals</label>
+              <select
+                id="showdown-style"
+                value={showdownStyle}
+                disabled={locked}
+                onChange={(event) => {
+                  const style = event.target.value as "random" | "balanced";
+                  setShowdownStyle(style);
+                  localStorage.setItem("poker-practice-showdown-style", style);
+                  void next(mode, street, weak, style);
+                }}
+              >
+                <option value="random">Random deals</option>
+                <option value="balanced">Balanced hands</option>
+              </select>
+              <p className="quiet">
+                {showdownStyle === "balanced"
+                  ? "Each winning hand category is selected equally often, including quads and straight flushes. These are practice frequencies, not natural deal odds."
+                  : "Natural random deals from the full deck."}
+              </p>
+            </div>
+          )}
           {mode === "equity" && (
             <div className="street-control">
               <label htmlFor="street">Street</label>
@@ -674,6 +713,7 @@ function Progress() {
         <p role="status">Loading progress…</p>
       ) : (
         <>
+          <LearningProgressSummary refresh={data} />
           <section className="progress-summary">
             <div>
               <p className="eyebrow">EXERCISES COMPLETED</p>
@@ -844,6 +884,10 @@ function Progress() {
 }
 const reference = [
   [
+    "Preflop opening charts",
+    "An opening chart groups the 1,326 possible starting combinations into 169 hand classes. Pairs lie on the diagonal; s means suited and o means offsuit. An opening percentage describes how many combinations the guide raises, not your chance of winning. The local library provides illustrative raise/fold opening baselines for 2-, 6-, and 9-player tables. It does not cover limpers, earlier raises, re-raises, or postflop decisions. These are not solved strategies or poker-skill grades.",
+  ],
+  [
     "Hand rankings",
     "Strongest to weakest: straight flush, four of a kind, full house, flush, straight, three of a kind, two pair, one pair, high card. A royal flush is an ace-high straight flush. Use the best five cards out of your two hole cards and the five community cards. An ace can be low in A–2–3–4–5 or high in 10–J–Q–K–A; a straight cannot wrap around.",
   ],
@@ -910,6 +954,10 @@ function Reference() {
           </section>
         ))}
       </div>
+      {(query.trim() === "" ||
+        /preflop|opening|chart|starting|range/i.test(query)) && (
+        <OpeningChartLibrary />
+      )}
       {!items.length && <p>No concepts match this search.</p>}
     </>
   );

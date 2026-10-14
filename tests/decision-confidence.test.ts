@@ -24,43 +24,29 @@ function review(difference = 0, margin = 2): DecisionReview {
     ],
   } as DecisionReview;
 }
-describe("confidence-aware model scoring", () => {
-  it("withholds noisy scores instead of rewarding uncertainty", () => {
-    expect(scoreDecision(review(72.7, 52.7))).toMatchObject({
-      status: "inconclusive",
-      score: null,
-      loss: null,
-    });
-    expect(scoreDecision(review(0, 52.7))).toMatchObject({
-      status: "inconclusive",
-      score: null,
-    });
-    expect(scoreDecision(review(8, 5))).toMatchObject({
-      status: "inconclusive",
-      score: null,
-    });
-  });
-  it("uses paired regret without subtracting error bars from the penalty", () => {
-    expect(scoreDecision(review(30, 5))).toMatchObject({
-      status: "scored",
-      score: 70,
-      loss: 30,
-    });
-    expect(scoreDecision(review(-4, 2))).toMatchObject({
-      status: "scored",
-      score: 100,
-      loss: 0,
-    });
-    expect(scoreDecision(review(200, 0))).toMatchObject({
-      status: "scored",
-      score: 0,
-      loss: 200,
-    });
-  });
-  it("leaves old, missing, duplicate, incomplete or low-sample comparisons unscored", () => {
+describe("model estimates are not poker-skill scores", () => {
+  it.each([
+    [72.7, 52.7],
+    [0, 52.7],
+    [8, 5],
+    [30, 5],
+    [-4, 2],
+    [200, 0],
+  ])(
+    "withholds skill grading for model difference %s ± %s",
+    (difference, margin) => {
+      expect(scoreDecision(review(difference, margin))).toMatchObject({
+        status: "model-only",
+        score: null,
+        loss: null,
+        reason: expect.stringContaining("unvalidated bot-response"),
+      });
+    },
+  );
+  it("does not let older or malformed comparisons revive a skill score", () => {
     expect(
       scoreDecision({ ...review(), analysisVersion: undefined }),
-    ).toMatchObject({ status: "legacy", score: null });
+    ).toMatchObject({ status: "model-only", score: null });
     for (const comparisons of [
       [],
       [review().comparisons![0], review().comparisons![0]],
@@ -68,24 +54,31 @@ describe("confidence-aware model scoring", () => {
       [{ ...review().comparisons![0], margin: NaN }],
     ]) {
       expect(scoreDecision({ ...review(), comparisons })).toMatchObject({
-        status: "inconclusive",
+        status: "model-only",
         score: null,
       });
     }
   });
-  it("permits analytic exact comparisons and ignores revealed cards", () => {
+  it("withholds even exact model comparisons and ignores revealed cards", () => {
     const r = review(20, 0);
     r.values.forEach((v) => {
       v.exact = true;
     });
     r.comparisons![0].samples = 0;
-    expect(scoreDecision(r)).toMatchObject({ status: "scored", score: 80 });
+    expect(scoreDecision(r)).toMatchObject({
+      status: "model-only",
+      score: null,
+      loss: null,
+    });
     expect(
       scoreDecision({ ...r, actualProbability: { win: 100 } as never }),
     ).toEqual(scoreDecision(r));
-    expect(scoreDecision({ ...r, street: "preflop" })).toBeNull();
+    expect(scoreDecision({ ...r, street: "preflop" })).toMatchObject({
+      status: "model-only",
+      score: null,
+    });
   });
-  it("upgrades legacy grading once while preserving historical profit and completion date", () => {
+  it("retires legacy grading without needing review frames or changing profit and date", () => {
     const db = openDatabase(":memory:");
     try {
       const state = createTable("upgrade", 2, 1);
@@ -107,8 +100,6 @@ describe("confidence-aware model scoring", () => {
       );
       state.rounds = [];
       saveHandStats(db, state);
-      state.rounds = [{ ...review(), analysisVersion: undefined }];
-      saveHandStats(db, state);
       const read = () =>
         JSON.parse(
           (
@@ -117,18 +108,65 @@ describe("confidence-aware model scoring", () => {
               .get(state.id) as { data: string }
           ).data,
         );
-      expect(read()).toEqual(old);
-      state.rounds = [review(30, 5)];
-      saveHandStats(db, state);
       expect(read()).toMatchObject({
         completedAt: old.completedAt,
         profit: 17,
-        scoringVersion: 2,
-        decisions: [{ score: 70, status: "scored" }],
+        scoringVersion: 4,
+        decisions: [
+          { street: "flop", score: null, loss: null, status: "model-only" },
+        ],
       });
+      const upgraded = read();
+      state.rounds = [review(30, 5)];
+      saveHandStats(db, state);
+      expect(read()).toEqual(upgraded);
       state.rounds = [review(0, 0)];
       saveHandStats(db, state);
-      expect(read().decisions[0].score).toBe(70);
+      expect(read()).toEqual(upgraded);
+    } finally {
+      db.close();
+    }
+  });
+  it("uses available review frames when retiring previously scored comparisons", () => {
+    const db = openDatabase(":memory:");
+    try {
+      const state = createTable("paired-upgrade", 2, 1);
+      state.complete = true;
+      state.rounds = [review(30, 0), { ...review(0, 0), street: "river" }];
+      db.prepare("INSERT INTO bot_tables VALUES(?,?)").run(
+        state.id,
+        JSON.stringify(state),
+      );
+      db.prepare("INSERT INTO bot_hand_stats VALUES(?,?,?)").run(
+        state.id,
+        1,
+        JSON.stringify({
+          scoringVersion: 3,
+          handNumber: 1,
+          profit: -20,
+          completedAt: "2026-01-02T00:00:00Z",
+          decisions: [
+            { street: "flop", score: 100, loss: 0, status: "scored" },
+          ],
+        }),
+      );
+      saveHandStats(db, state);
+      const saved = JSON.parse(
+        (
+          db
+            .prepare("SELECT data FROM bot_hand_stats WHERE table_id=?")
+            .get(state.id) as { data: string }
+        ).data,
+      );
+      expect(saved).toMatchObject({
+        scoringVersion: 4,
+        profit: -20,
+        completedAt: "2026-01-02T00:00:00Z",
+        decisions: [
+          { street: "flop", score: null, loss: null, status: "model-only" },
+          { street: "river", score: null, loss: null, status: "model-only" },
+        ],
+      });
     } finally {
       db.close();
     }

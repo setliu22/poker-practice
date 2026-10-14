@@ -7,6 +7,7 @@ import {
   settle,
   tableView,
   botAction,
+  replayTable,
   type TableState,
 } from "../packages/poker/src/table";
 import { random, validateCards } from "../packages/poker/src/index";
@@ -25,6 +26,87 @@ function street(count = 3): TableState {
   return s;
 }
 describe("table rules", () => {
+  it.each([1, 2])(
+    "replays the exact deal, positions, starting reads and bot actions for policy %i",
+    (version) => {
+      const reads = [
+        { seat: 0, decisions: 20, facing: 15, folds: 10, calls: 3, raises: 2 },
+      ];
+      const source = runBots(
+        createTable("original", 6, 42, 3, 7, 0, version, reads),
+      );
+      const initial = structuredClone(source);
+      const finish = (state: TableState) => {
+        let actions = 0;
+        while (!state.complete) {
+          const legal = legalActions(state)!;
+          act(state, 0, legal.canCheck ? "check" : "call");
+          runBots(state);
+          expect(++actions).toBeLessThan(100);
+        }
+      };
+      finish(source);
+      const originalResult = structuredClone(source);
+      const replay = replayTable(source, "replay");
+      expect(source).toEqual(originalResult);
+      expect(replay.replayOf).toEqual({ tableId: "original", handNumber: 7 });
+      expect(replay.analysisIdentity).toBe("original");
+      expect(replay.revision).toBe(0);
+      expect(replay.seed).toBe(initial.seed);
+      expect(replay.dealer).toBe(initial.dealer);
+      expect(replay.handNumber).toBe(initial.handNumber);
+      expect(replay.policyVersion).toBe(version);
+      expect(replay.players).toEqual(initial.players);
+      expect(replay.runout).toEqual(initial.runout);
+      expect(replay.history).toEqual(initial.history);
+      expect(replay.startingReads).toEqual(reads);
+      expect(replay.reads).toEqual(initial.reads);
+      finish(replay);
+      for (const key of [
+        "players",
+        "board",
+        "history",
+        "actions",
+        "reads",
+        "policyEvents",
+        "decisions",
+      ] as const)
+        expect(replay[key]).toEqual(source[key]);
+      const view = tableView(replay);
+      expect(view.replayOf).toEqual(replay.replayOf);
+      expect(view).not.toHaveProperty("analysisIdentity");
+      expect(view).not.toHaveProperty("startingReads");
+    },
+  );
+  it("rejects unfinished or destructive replays and preserves the analysis identity of replayed replays", () => {
+    const state = createTable("original", 2, 7);
+    expect(() => replayTable(state, "copy")).toThrow("Finish the current hand");
+    act(state, 0, "fold");
+    expect(() => replayTable(state, "original")).toThrow("separate game");
+    const first = replayTable(state, "first");
+    act(first, 0, "fold");
+    const second = replayTable(first, "second");
+    expect(second.analysisIdentity).toBe("original");
+    expect(second.replayOf).toEqual({ tableId: "first", handNumber: 1 });
+  });
+  it("reuses the recorded cards rather than regenerating an old hand from its seed", () => {
+    const source = createTable("recorded", 2, 7);
+    const alternate = createTable("other-deal", 2, 92);
+    source.players.forEach((p, seat) => {
+      p.hole = [...alternate.players[seat].hole];
+    });
+    source.runout = [...alternate.runout];
+    act(source, 0, "fold");
+    const replay = replayTable(source, "replay-recorded");
+    expect(replay.players.map((p) => p.hole)).toEqual(
+      alternate.players.map((p) => p.hole),
+    );
+    expect(replay.runout).toEqual(alternate.runout);
+    expect(replay.seed).toBe(source.seed);
+    const broken = structuredClone(source);
+    broken.runout[0] = broken.players[0].hole[0];
+    expect(() => replayTable(broken, "broken-deal")).toThrow("unique");
+  });
   it("rejects unknown runtime actions without mutating the hand or recorded reads", () => {
     const s = createTable("invalid", 2, 5);
     const before = structuredClone(s);

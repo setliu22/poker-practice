@@ -1,4 +1,4 @@
-import { best, compare, deal, random, ranks } from "./index";
+import { best, compare, deal, random, ranks, validateCards } from "./index";
 import {
   contextualDistribution,
   personalities,
@@ -12,6 +12,7 @@ import type {
   TableAction,
   TableView,
   DecisionReview,
+  DealMode,
 } from "../../shared/src/table";
 export type Seat = {
   seat: number;
@@ -76,6 +77,9 @@ export type TableState = {
   actions?: PublicAction[];
   reads?: PublicRead[];
   startingReads?: PublicRead[];
+  replayOf?: { tableId: string; handNumber: number };
+  analysisIdentity?: string;
+  dealMode?: DealMode;
 };
 const streets = ["preflop", "flop", "turn", "river"];
 const active = (s: TableState) => s.players.filter((p) => !p.folded);
@@ -172,6 +176,48 @@ export function createTable(
   note(s, bb, "Posts big blind 10");
   s.actor = nextSeat(s, bb, s.pending);
   return s;
+}
+export function replayTable(source: TableState, id: string): TableState {
+  if (!source.complete)
+    throw new Error("Finish the current hand before replaying it.");
+  if (id === source.id) throw new Error("A replay must be a separate game.");
+  const replay = createTable(
+    id,
+    source.players.length,
+    source.seed,
+    source.dealer,
+    source.handNumber,
+    0,
+    source.policyVersion ?? 1,
+    source.startingReads ?? [],
+  );
+  // Replay the recorded deal, even if the deck generator changes in a later
+  // release. The seed still reproduces the original bot action randomness.
+  validateCards(
+    [...source.players.flatMap((p) => p.hole), ...source.runout],
+    source.players.length * 2 + 5,
+    source.players.length * 2 + 5,
+  );
+  replay.players.forEach((p, seat) => {
+    p.hole = [...source.players[seat].hole];
+  });
+  replay.runout = [...source.runout];
+  replay.replayOf = { tableId: source.id, handNumber: source.handNumber };
+  // Keep analysis sampling reproducible while giving the replay its own saved game.
+  replay.analysisIdentity = source.analysisIdentity ?? source.id;
+  replay.dealMode = source.dealMode ?? "random";
+  return runBots(replay);
+}
+/** Replace only the current hand, preserving the game identity and recorded deal. */
+export function resetHand(source: TableState): TableState {
+  const reset = replayTable(
+    { ...source, complete: true },
+    `${source.id}-reset`,
+  );
+  reset.id = source.id;
+  reset.revision = source.revision + 1;
+  reset.replayOf = source.replayOf;
+  return reset;
 }
 export function legalActions(
   s: TableState,
@@ -542,6 +588,7 @@ export function tableView(s: TableState): TableView {
     id: s.id,
     revision: s.revision,
     handNumber: s.handNumber,
+    replayOf: s.replayOf,
     dealer: s.dealer,
     street: s.street,
     board: s.board,
@@ -549,6 +596,7 @@ export function tableView(s: TableState): TableView {
     currentBet: s.currentBet,
     actor: s.actor,
     complete: s.complete,
+    dealMode: s.dealMode ?? "random",
     players: s.players.map((p) => ({
       ...p,
       profile: publicProfile(p.botId),

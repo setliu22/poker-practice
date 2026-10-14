@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS solver_charts (
+  key TEXT PRIMARY KEY,
+  data TEXT NOT NULL
+);
