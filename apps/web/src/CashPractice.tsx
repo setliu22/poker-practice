@@ -173,7 +173,7 @@ export function CashProgressSummary({
                   .sort((a, b) => b.reviewPriority - a.reviewPriority)
                   .map((s) => (
                     <li key={s.skill}>
-                      <strong>{s.label}</strong>
+                      <strong>{labels[s.skill]}</strong>
                       <span>
                         {s.independentCorrect}/{s.independentAttempts}{" "}
                         independent complete answers · {s.actionMistakes} action
@@ -203,7 +203,8 @@ export function CashProgressSummary({
               <ul>
                 {data.recent.slice(0, 5).map((r) => (
                   <li key={r.id}>
-                    {r.label} · {r.assisted ? "Hinted" : "Independent"} ·{" "}
+                    {labels[r.skill]} · {r.assisted ? "Hinted" : "Independent"}{" "}
+                    ·{" "}
                     {r.correct
                       ? "Complete answer correct"
                       : "Revisit reasoning"}{" "}

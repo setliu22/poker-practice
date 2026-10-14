@@ -113,8 +113,11 @@ test("draw density shows a weighted union without double counting and explains i
   for (const index of [1, 2]) {
     const round = reviews.nth(index);
     await round.locator(":scope > summary").click();
-    await expect(round.locator(".range-details > summary")).toBeHidden();
-    await round.locator(".bot-estimate-details > summary").click();
+    await expect(round.locator(".range-details")).not.toHaveAttribute(
+      "open",
+      "",
+    );
+    await expect(round.locator(".draw-density")).toBeHidden();
     await round.locator(".range-details > summary").click();
     const panel = round.getByRole("region", {
       name: "Draw density: 35.0% of Nico’s estimated range",

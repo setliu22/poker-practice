@@ -23,3 +23,7 @@ App started in owned dev session **6321**, http://127.0.0.1:5173 (API3001). Prio
 Next: inspect staged source, commit and publish feature, verify remote tree/head and full Linux CI. Fix actual failures, integrate main and update final handoff. Workers completed their assigned roles and returned ownership; only lead work remains. Current tools cannot delete historical agent entries.
 
 Node: `~/.local/share/poker-practice/node-v24.21.0-darwin-arm64/bin`. GitHub connector writes work; CLI credentials are session-limited. Preserve metadata-equivalent checkpoints and compare trees before synchronizing connector commits. Never publish learner data, dependencies, artifacts or external solver. Earlier cash/randomized features remain intact.
+
+## CI follow-up
+
+GitHub run38630837672 on `e1500a2` passed unit tests/build and134/138 browser cases. Two assertions failed in each project: inconsistent cash progress skill names ('River value betting' versus the shorter control name 'Value bets'), and a lead-added test that assumed the separate opponent-range disclosure was nested inside bot estimates. Progress now uses the existing short skill labels consistently; the draw-density test checks its own closed disclosure before opening it and retains all mathematical/keyboard/mobile assertions. Narrow independent follow-up review and production build passed. App/API/engine mechanics unchanged. Next: publish these two-file fixes and rerun Linux full verification; main integration remains pending.
