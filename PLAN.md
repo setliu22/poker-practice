@@ -1,6 +1,6 @@
 # Active plan
 
-Status: In progress — Linux browser verification and publication. Owner: lead. Baseline clean `main` at `8204eef`; branch `fix/randomized-preflop-walkthrough`.
+Status: Complete — randomized guide delivered, independently reviewed and verified. Owner: lead. Baseline clean `main` at `8204eef`; branch `fix/randomized-preflop-walkthrough`.
 
 ## Objective and acceptance
 
@@ -20,12 +20,16 @@ Builder U owns `apps/web/src/PreflopWalkthrough.tsx`, appended scoped rules in `
 
 Lead owns root docs, README, source note, integration and publication. G/U may propose contract changes through lead, never edit one another's files. Readonly reviewer/tester inspect final diff and test behavior after builders settle.
 
-| Task | Role                         | Dependency                                               | Status                  |
-| ---- | ---------------------------- | -------------------------------------------------------- | ----------------------- |
-| G    | Generation builder           | Contract above                                           | Complete                |
-| U    | UI/browser builder           | Contract above; wait for generator before running checks | Complete                |
-| R    | Independent reviewer         | Stable G/U                                               | Complete                |
-| V    | Functional tester / Linux CI | Stable G/U                                               | Core passed; CI pending |
-| I    | Lead integration/handoff     | R/V                                                      | In progress             |
+| Task | Role                         | Dependency                                               | Status   |
+| ---- | ---------------------------- | -------------------------------------------------------- | -------- |
+| G    | Generation builder           | Contract above                                           | Complete |
+| U    | UI/browser builder           | Contract above; wait for generator before running checks | Complete |
+| R    | Independent reviewer         | Stable G/U                                               | Complete |
+| V    | Functional tester / Linux CI | Stable G/U                                               | Complete |
+| I    | Lead integration/handoff     | R/V                                                      | Complete |
 
 Previous online-cash lab is complete: code `bc8661f`, GitHub run 38510972941 passed315 tests/build/118 browser cases. Preserve it. Each worker needs this role/ticket and must return ownership when done; no idle/unassigned agents.
+
+## Delivery evidence
+
+Application commit `30effb0efc8b9733ff72f5bb758b71e028f42233`: [GitHub run 38574347619](https://github.com/setliu22/poker-practice/actions/runs/38574347619) passed 326 unit/integration tests (two optional solver skips), production build and all 132 desktop/mobile browser cases. Independent reviewer/tester completed their scoped tickets. Final changes are documentation only. The app was restarted and HTTP-verified to serve the new guide at http://127.0.0.1:5173.
