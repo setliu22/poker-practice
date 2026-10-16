@@ -113,14 +113,14 @@ const firstLesson: LessonDefinition = {
     choiceQuestion(
       "next-street",
       "After preflop betting",
-      "At least two players remain and everyone has matched the preflop bet. No one is all-in. What comes next?",
+      "At least two players remain. Preflop, all other remaining players call the big blind, then the big blind checks. The betting round is complete and no one is all-in. What comes next?",
       [
         ["flop", "Deal the three-card flop"],
         ["turn", "Deal the one-card turn"],
         ["showdown", "Immediately compare hands"],
       ],
       "flop",
-      "The flop follows preflop betting and reveals three community cards. Another betting round follows; the turn and river come later.",
+      "After the callers, the big blind still has the option to raise. Here the big blind checks, completing preflop betting. The flop then reveals three community cards and another betting round follows.",
       "The street order is preflop, flop, turn, river, then showdown if needed.",
     ),
   ],

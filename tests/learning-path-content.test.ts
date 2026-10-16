@@ -125,6 +125,11 @@ describe("versioned learning path contract and content", () => {
   });
 
   it("grades every legal-action question deterministically under its pinned version", () => {
+    // Matching the big blind alone leaves its option open; the scenario must
+    // establish the final check before the stored "flop" answer is justified.
+    const nextStreet = getPublicQuestion(contentId, version, "next-street")!;
+    expect(nextStreet.prompt).toMatch(/big blind checks/i);
+    expect(nextStreet.prompt).toMatch(/betting round is complete/i);
     const expected = [
       ["free-check", "check"],
       ["facing-bet", "call"],
