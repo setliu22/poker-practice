@@ -78,6 +78,7 @@ export type TableState = {
   reads?: PublicRead[];
   startingReads?: PublicRead[];
   replayOf?: { tableId: string; handNumber: number };
+  branchOf?: { tableId: string; sequence: number; handNumber: number };
   analysisIdentity?: string;
   dealMode?: DealMode;
 };
@@ -217,6 +218,7 @@ export function resetHand(source: TableState): TableState {
   reset.id = source.id;
   reset.revision = source.revision + 1;
   reset.replayOf = source.replayOf;
+  reset.branchOf = source.branchOf;
   return reset;
 }
 export function legalActions(
@@ -589,6 +591,7 @@ export function tableView(s: TableState): TableView {
     revision: s.revision,
     handNumber: s.handNumber,
     replayOf: s.replayOf,
+    branchOf: s.branchOf,
     dealer: s.dealer,
     street: s.street,
     board: s.board,

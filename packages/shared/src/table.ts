@@ -48,6 +48,7 @@ export type TableView = {
   complete: boolean;
   dealMode?: DealMode;
   replayOf?: { tableId: string; handNumber: number };
+  branchOf?: { tableId: string; sequence: number; handNumber: number };
   players: {
     seat: number;
     name: string;
@@ -218,6 +219,7 @@ export type GameStats = {
   gameNumber: number;
   revision: number;
   replayOf?: { tableId: string; handNumber: number };
+  branchOf?: { tableId: string; sequence: number; handNumber: number };
   startedAt: string;
   players: number;
   hands: number;

@@ -6,6 +6,7 @@ import type {
 } from "../../../packages/shared/src/assistant";
 import { StudyDialog } from "./StudyDialog";
 import { SolverChart } from "./SolverChart";
+import { recordAssessmentShown } from "./usage-client";
 export function MoveRecommendation({
   table,
   onAdvice,
@@ -20,6 +21,10 @@ export function MoveRecommendation({
     [chartOpen, setChartOpen] = useState(false),
     [retry, setRetry] = useState(0),
     [requested, setRequested] = useState(false);
+  const [receipt, setReceipt] = useState<string | undefined>();
+  useEffect(() => {
+    if (result?.recommendation) recordAssessmentShown(receipt);
+  }, [result, receipt]);
   useEffect(() => {
     if (!requested) return;
     const abort = new AbortController();
@@ -27,6 +32,7 @@ export function MoveRecommendation({
       attempts = 0;
     onAdvice(null);
     setResult(null);
+    setReceipt(undefined);
     setError("");
     setChartOpen(false);
     const legal = table.legal!;
@@ -51,6 +57,7 @@ export function MoveRecommendation({
         if (!r.ok) throw new Error(data.error);
         if (!abort.signal.aborted) {
           setResult(data);
+          setReceipt(r.headers.get("X-Practice-Receipt") ?? undefined);
           onAdvice(data.recommendation ?? null);
         }
       } catch (e) {

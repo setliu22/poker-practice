@@ -89,6 +89,9 @@ export function GameStats({
                     {g.replayOf
                       ? ` · Replay of hand ${g.replayOf.handNumber}`
                       : ""}
+                    {g.branchOf
+                      ? ` · Branch of hand ${g.branchOf.handNumber}, decision ${g.branchOf.sequence}`
+                      : ""}
                     {g.id === currentId ? " · At table" : ""}
                   </span>
                   <time className="quiet" dateTime={g.startedAt}>
@@ -126,6 +129,13 @@ export function GameStats({
                     <p className="quiet">
                       Replay of hand {current.replayOf.handNumber} · original
                       result kept separately
+                    </p>
+                  )}
+                  {current.branchOf && (
+                    <p className="quiet">
+                      Practice branch of hand {current.branchOf.handNumber},
+                      decision {current.branchOf.sequence} · original result
+                      kept separately
                     </p>
                   )}
                   <p className="quiet">
@@ -166,6 +176,7 @@ export function GameStats({
                 Completed hands only. Poker skill is not scored.
               </p>
               {!current.replayOf &&
+                !current.branchOf &&
                 current.currentHand >
                   current.hands + (current.inProgress ? 1 : 0) && (
                   <p className="quiet">

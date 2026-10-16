@@ -23,22 +23,14 @@ import {
 import { generate, grade, type Specification } from "./exercises";
 import {
   gameDeleteSchema,
-  tableCreateSchema,
-  tableActionSchema,
-  tableNextSchema,
   tableOddsSchema,
 } from "../../../packages/shared/src/table";
 import type { LiveOdds } from "../../../packages/shared/src/table";
-import {
-  act,
-  runBots,
-  replayTable,
-  resetHand,
-  tableView,
-  type TableState,
-} from "../../../packages/poker/src/table";
+import { type TableState } from "../../../packages/poker/src/table";
 import { analyzeTable } from "../../../packages/poker/src/table-review";
-import { createPracticeTable } from "../../../packages/poker/src/easy-deals";
+import { tableRoutes } from "./table-routes";
+import { currentRevision, ensureJournal, loadTable } from "./table-journal";
+import { createExposureReceipt, usageRoutes } from "./usage";
 import { liveOdds } from "../../../packages/poker/src/live-odds";
 import {
   openingCharts,
@@ -52,12 +44,24 @@ export function createApp(db: Database.Database) {
   app.use("/api/learning", learningRoutes(db));
   app.use("/api/learning/read", readLessonRoutes(db));
   app.use("/api/cash-practice", cashPracticeRoutes(db));
+  app.use("/api/v1/usage", usageRoutes(db));
   // Preserve the latest available completed hand for tables created before game tracking.
-  for (const row of db.prepare("SELECT state FROM bot_tables").all() as {
-    state: string;
+  for (const row of db.prepare("SELECT id FROM bot_tables").all() as {
+    id: string;
   }[]) {
-    saveHandStats(db, JSON.parse(row.state));
+    db.transaction(() => {
+      const state = loadTable(db, row.id);
+      if (!state) return;
+      ensureJournal(db, state);
+      // Rebuild the saved-games projection too, before the UI reads its list.
+      db.prepare("UPDATE bot_tables SET state=? WHERE id=?").run(
+        JSON.stringify(state),
+        row.id,
+      );
+      saveHandStats(db, state);
+    })();
   }
+  app.use(["/api/tables", "/api/v1/tables"], tableRoutes(db));
   app.get("/api/games", (_req, res) => res.json(gameStats(db)));
   app.get("/api/preflop-charts", (_req, res) => res.json(openingCharts));
   const getSolverChart = solverCharts(db);
@@ -65,11 +69,8 @@ export function createApp(db: Database.Database) {
     const { revision, retry } = tableOddsSchema
       .extend({ retry: z.boolean().optional() })
       .parse(req.body);
-    const row = db
-      .prepare("SELECT state FROM bot_tables WHERE id=?")
-      .get(req.params.id) as { state: string } | undefined;
-    if (!row) return void res.status(404).json({ error: "Table not found." });
-    const state: TableState = JSON.parse(row.state);
+    const state = loadTable(db, req.params.id);
+    if (!state) return void res.status(404).json({ error: "Table not found." });
     if (state.revision !== revision)
       return void res.status(409).json({
         error: "The hand changed. Open a chart for the current decision.",
@@ -83,11 +84,8 @@ export function createApp(db: Database.Database) {
   });
   app.post("/api/tables/:id/assistant", async (req, res) => {
     const input = assistantSchema.parse(req.body);
-    const row = db
-      .prepare("SELECT state FROM bot_tables WHERE id=?")
-      .get(req.params.id) as { state: string } | undefined;
-    if (!row) return void res.status(404).json({ error: "Table not found." });
-    const state: TableState = JSON.parse(row.state);
+    const state = loadTable(db, req.params.id);
+    if (!state) return void res.status(404).json({ error: "Table not found." });
     if (state.revision !== input.revision)
       return void res
         .status(409)
@@ -113,20 +111,28 @@ export function createApp(db: Database.Database) {
         input,
         controller.signal,
       );
-      const current = db
-        .prepare(
-          "SELECT json_extract(state,'$.revision') AS revision FROM bot_tables WHERE id=?",
-        )
-        .get(state.id) as { revision: number } | undefined;
-      if (!current)
+      const revisionNow = currentRevision(db, state.id);
+      if (revisionNow === undefined)
         return void res
           .status(404)
           .json({ error: "This game was deleted while calculating." });
-      if (current.revision !== input.revision)
+      if (revisionNow !== input.revision)
         return void res.status(409).json({
           error:
             "The hand changed while calculating. Inspect your current decision.",
         });
+      res.setHeader(
+        "X-Practice-Receipt",
+        createExposureReceipt(db, {
+          tableId: state.id,
+          revision: state.revision,
+          assessment: {
+            kind: "move-hint",
+            modelId: "authored-analysis-v7",
+            result: "shown",
+          },
+        }),
+      );
       res.json(result);
     } catch (error) {
       if (controller.signal.aborted) return;
@@ -144,14 +150,11 @@ export function createApp(db: Database.Database) {
 
   app.post("/api/tables/:id/guide", (req, res) => {
     const { revision } = tableOddsSchema.parse(req.body);
-    const row = db
-      .prepare("SELECT state FROM bot_tables WHERE id=?")
-      .get(req.params.id) as { state: string } | undefined;
-    if (!row)
+    const state = loadTable(db, req.params.id);
+    if (!state)
       return void res
         .status(404)
         .json({ error: "Table not found. Start a new table." });
-    const state: TableState = JSON.parse(row.state);
     if (state.revision !== revision)
       return void res.status(409).json({
         error: "This hand changed. Open the guide for your current decision.",
@@ -161,18 +164,26 @@ export function createApp(db: Database.Database) {
         error: "The guide is available when it is your turn in an active hand.",
       });
     // Reading a guide never advances the game or writes an analysis/stats row.
+    res.setHeader(
+      "X-Practice-Receipt",
+      createExposureReceipt(db, {
+        tableId: state.id,
+        revision: state.revision,
+        assessment: {
+          kind: "guide",
+          modelId: "preflop-guide-v1",
+          result: "shown",
+        },
+      }),
+    );
     res.json(livePreflopGuide(state));
   });
   app.delete("/api/games/:id", (req, res) => {
     const { revision } = gameDeleteSchema.parse(req.body);
     const status = db.transaction(() => {
-      const row = db
-        .prepare(
-          "SELECT json_extract(state,'$.revision') AS revision FROM bot_tables WHERE id=?",
-        )
-        .get(req.params.id) as { revision: number } | undefined;
-      if (!row) return 204; // A retry of a successful deletion is safe.
-      if (row.revision !== revision) return 409;
+      const revisionNow = currentRevision(db, req.params.id);
+      if (revisionNow === undefined) return 204; // A retry of a successful deletion is safe.
+      if (revisionNow !== revision) return 409;
       for (const table of [
         "bot_commands",
         "bot_hand_stats",
@@ -191,58 +202,13 @@ export function createApp(db: Database.Database) {
       });
     else res.status(204).end();
   });
-  app.post("/api/tables", (req, res) => {
-    const { players, dealMode } = tableCreateSchema.parse(req.body);
-    const state = runBots(
-      createPracticeTable(
-        randomUUID(),
-        players,
-        randomInt(0, 4294967295),
-        dealMode,
-      ),
-    );
-    db.transaction(() => {
-      db.prepare("INSERT INTO bot_tables VALUES(?,?)").run(
-        state.id,
-        JSON.stringify(state),
-      );
-      db.prepare("INSERT INTO bot_games VALUES(?,?)").run(
-        state.id,
-        new Date().toISOString(),
-      );
-      db.prepare("INSERT INTO bot_game_numbers(table_id) VALUES(?)").run(
-        state.id,
-      );
-      saveHandStats(db, state);
-    })();
-    res.status(201).json(tableView(state));
-  });
-  app.get("/api/tables/:id", (req, res) => {
-    const row = db
-      .prepare("SELECT state FROM bot_tables WHERE id=?")
-      .get(req.params.id) as { state: string } | undefined;
-    if (!row) {
-      res.status(404).json({ error: "Table not found. Start a new table." });
-      return;
-    }
-    const state = analyzeTable(JSON.parse(row.state));
-    db.prepare("UPDATE bot_tables SET state=? WHERE id=?").run(
-      JSON.stringify(state),
-      state.id,
-    );
-    saveHandStats(db, state);
-    res.json(tableView(state));
-  });
   app.post("/api/tables/:id/odds", async (req, res) => {
     const { revision } = tableOddsSchema.parse(req.body);
-    const row = db
-      .prepare("SELECT state FROM bot_tables WHERE id=?")
-      .get(req.params.id) as { state: string } | undefined;
-    if (!row)
+    const state = loadTable(db, req.params.id);
+    if (!state)
       return void res
         .status(404)
         .json({ error: "Table not found. Start a new table." });
-    const state: TableState = JSON.parse(row.state);
     if (state.revision !== revision)
       return void res.status(409).json({
         error: "This hand has changed. Check odds for the current decision.",
@@ -270,186 +236,29 @@ export function createApp(db: Database.Database) {
     }
     // Other tabs can act while the cooperative calculation runs. Never return
     // an old estimate as though it describes their new decision.
-    const current = db
-      .prepare(
-        "SELECT json_extract(state, '$.revision') AS revision FROM bot_tables WHERE id=?",
-      )
-      .get(req.params.id) as { revision: number } | undefined;
-    if (!current)
+    const revisionNow = currentRevision(db, req.params.id);
+    if (revisionNow === undefined)
       return void res
         .status(404)
         .json({ error: "This game was deleted while calculating odds." });
-    if (current.revision !== revision)
+    if (revisionNow !== revision)
       return void res.status(409).json({
         error: "This hand changed while calculating. Check odds again.",
       });
+    res.setHeader(
+      "X-Practice-Receipt",
+      createExposureReceipt(db, {
+        tableId: state.id,
+        revision: state.revision,
+        assessment: {
+          kind: "odds",
+          modelId: "public-odds-v1",
+          result: "shown",
+        },
+      }),
+    );
     res.json(result);
   });
-  app.post("/api/tables/:id/reset-hand", (req, res) => {
-    const input = tableNextSchema.parse(req.body);
-    const result = db.transaction(() => {
-      const saved = db
-        .prepare(
-          "SELECT response FROM bot_commands WHERE table_id=? AND action_id=?",
-        )
-        .get(req.params.id, input.actionId) as { response: string } | undefined;
-      if (saved) return { status: 200, body: JSON.parse(saved.response) };
-      const row = db
-        .prepare("SELECT state FROM bot_tables WHERE id=?")
-        .get(req.params.id) as { state: string } | undefined;
-      if (!row) return { status: 404, body: { error: "Table not found." } };
-      const source: TableState = JSON.parse(row.state);
-      if (source.revision !== input.revision)
-        return {
-          status: 409,
-          body: { error: "This hand changed. Reload before restarting it." },
-        };
-      const state = resetHand(source);
-      db.prepare(
-        "DELETE FROM bot_hand_stats WHERE table_id=? AND hand_number=?",
-      ).run(source.id, source.handNumber);
-      db.prepare("UPDATE bot_tables SET state=? WHERE id=?").run(
-        JSON.stringify(state),
-        source.id,
-      );
-      saveHandStats(db, state);
-      const view = tableView(state);
-      db.prepare("INSERT INTO bot_commands VALUES(?,?,?)").run(
-        source.id,
-        input.actionId,
-        JSON.stringify(view),
-      );
-      return { status: 200, body: view };
-    })();
-    res.status(result.status).json(result.body);
-  });
-  app.post("/api/tables/:id/replay", (req, res) => {
-    const input = tableNextSchema.parse(req.body);
-    const result = db.transaction(() => {
-      const saved = db
-        .prepare(
-          "SELECT response FROM bot_commands WHERE table_id=? AND action_id=?",
-        )
-        .get(req.params.id, input.actionId) as { response: string } | undefined;
-      if (saved) return { status: 200, body: JSON.parse(saved.response) };
-      const row = db
-        .prepare("SELECT state FROM bot_tables WHERE id=?")
-        .get(req.params.id) as { state: string } | undefined;
-      if (!row)
-        return {
-          status: 404,
-          body: { error: "Table not found. Start a new table." },
-        };
-      const source: TableState = JSON.parse(row.state);
-      if (source.revision !== input.revision)
-        return {
-          status: 409,
-          body: { error: "This table has changed. Reload its current state." },
-        };
-      if (!source.complete)
-        return {
-          status: 400,
-          body: { error: "Finish the current hand before replaying it." },
-        };
-      const state = replayTable(source, randomUUID());
-      db.prepare("INSERT INTO bot_tables VALUES(?,?)").run(
-        state.id,
-        JSON.stringify(state),
-      );
-      db.prepare("INSERT INTO bot_games VALUES(?,?)").run(
-        state.id,
-        new Date().toISOString(),
-      );
-      db.prepare("INSERT INTO bot_game_numbers(table_id) VALUES(?)").run(
-        state.id,
-      );
-      saveHandStats(db, state);
-      const view = tableView(state);
-      // Receipt belongs to the source. Retrying creates no second replay and
-      // never rewrites the original hand, history, or profit.
-      db.prepare("INSERT INTO bot_commands VALUES(?,?,?)").run(
-        source.id,
-        input.actionId,
-        JSON.stringify(view),
-      );
-      return { status: 201, body: view };
-    })();
-    res.status(result.status).json(result.body);
-  });
-  for (const route of ["actions", "next"] as const)
-    app.post(`/api/tables/:id/${route}`, (req, res) => {
-      const input =
-        route === "actions"
-          ? tableActionSchema.parse(req.body)
-          : tableNextSchema.parse(req.body);
-      const result = db.transaction(() => {
-        const saved = db
-          .prepare(
-            "SELECT response FROM bot_commands WHERE table_id=? AND action_id=?",
-          )
-          .get(req.params.id, input.actionId) as
-          { response: string } | undefined;
-        if (saved) return { status: 200, body: JSON.parse(saved.response) };
-        const row = db
-          .prepare("SELECT state FROM bot_tables WHERE id=?")
-          .get(req.params.id) as { state: string } | undefined;
-        if (!row)
-          return {
-            status: 404,
-            body: { error: "Table not found. Start a new table." },
-          };
-        let state: TableState = analyzeTable(JSON.parse(row.state));
-        if (state.revision !== input.revision)
-          return {
-            status: 409,
-            body: {
-              error: "This table has changed. Reload its current state.",
-            },
-          };
-        try {
-          if (route === "next") {
-            if (!state.complete)
-              return {
-                status: 400,
-                body: { error: "Finish the current hand first." },
-              };
-            saveHandStats(db, state);
-            state = createPracticeTable(
-              state.id,
-              state.players.length,
-              randomInt(0, 4294967295),
-              state.dealMode ?? "random",
-              state.dealer + 1,
-              state.handNumber + 1,
-              state.revision,
-              2,
-              state.reads ?? [],
-            );
-          } else {
-            const actionInput = tableActionSchema.parse(input);
-            act(state, 0, actionInput.action, actionInput.amount);
-          }
-          state.revision++;
-          runBots(state);
-        } catch (err) {
-          return { status: 400, body: { error: (err as Error).message } };
-        }
-        analyzeTable(state);
-        saveHandStats(db, state);
-        const view = tableView(state);
-        db.prepare("UPDATE bot_tables SET state=? WHERE id=?").run(
-          JSON.stringify(state),
-          state.id,
-        );
-        db.prepare("INSERT INTO bot_commands VALUES(?,?,?)").run(
-          state.id,
-          input.actionId,
-          JSON.stringify(view),
-        );
-        return { status: 200, body: view };
-      })();
-      res.status(result.status).json(result.body);
-    });
   const attempts = (): Attempt[] =>
     (
       db.prepare("SELECT id,data FROM attempts ORDER BY id DESC").all() as {

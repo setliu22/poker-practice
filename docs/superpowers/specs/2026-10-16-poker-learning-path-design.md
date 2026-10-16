@@ -1,6 +1,6 @@
 # Poker learning path design
 
-**Status:** The user approved the curriculum-first direction and the three design sections on 2026-10-16. This written spec is awaiting user review. No implementation is authorized yet.
+**Status:** Approved by the user on 2026-10-16. This document defines the scope for the implementation plan; implementation awaits the user's review of that plan and choice of execution method.
 
 ## Goal
 

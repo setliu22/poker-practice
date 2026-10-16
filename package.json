@@ -14,7 +14,14 @@
     "test": "vitest run",
     "test:browser": "playwright test",
     "format": "prettier --write apps packages tests *.ts package.json tsconfig.json README.md",
-    "solver:setup": "tsx scripts/setup-solver.ts"
+    "solver:setup": "tsx scripts/setup-solver.ts",
+    "ml:generate": "tsx scripts/ml-generate.ts",
+    "ml:train": "python3 scripts/ml-train.py",
+    "ml:benchmark": "tsx scripts/ml-benchmark.ts",
+    "data:backup": "tsx scripts/data-backup.ts",
+    "data:restore": "tsx scripts/data-restore.ts",
+    "ml:mistake-test": "tsx scripts/ml-mistake-experiment.ts",
+    "ml:compare-speed": "tsx scripts/ml-compare-speed.ts"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

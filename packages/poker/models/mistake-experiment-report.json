@@ -1,0 +1,373 @@
+{
+  "experiment": "Controlled premium-overfold injection against frozen quick assessment",
+  "protocolHash": "881850371eb2784aed2ec8adca9506a5830e67508bdb7569b6fd0e6ba33c61d9",
+  "protocol": {
+    "version": "premium-overfold-v1",
+    "source": "synthetic",
+    "naturalStart": 1000000,
+    "challengeStart": 2000000,
+    "premium": "TT, JJ, QQ, KK, AA, AK suited or offsuit",
+    "controlPremiumFoldProbability": 0.1,
+    "leakyPremiumFoldProbability": 0.8,
+    "premiumNonfold": {
+      "call": 0.1,
+      "raise20": 0.3,
+      "raise25": 0.6
+    },
+    "nonpremium": {
+      "fold": 0.35,
+      "call": 0.2,
+      "raise20": 0.2,
+      "raise25": 0.25
+    },
+    "samples": 640,
+    "teacher": "analysis7-paired-v1; teacherFlag=max(alternative difference-margin)>0",
+    "dealSeed": "imul(group+1,2654435761) unsigned32; identical to pilot identity mapping, disjoint groups",
+    "policySeed": "imul(group+1,2246822519) xor 0xb5297a4d unsigned32; two shared draws",
+    "teacherSeed": "imul(group+1,3266489917) xor 0x68e31da4 unsigned32",
+    "model": "frozen opening-mara-et-v1; deployed thresholds unchanged; raw0.5 diagnostic only",
+    "challengeSelection": "first qualifying hero-only premium openings from challengeStart; no outcome filtering"
+  },
+  "natural": 400,
+  "challenge": 200,
+  "modelSha256": "c89f8d0adfe7062dc1b30831edd353ba000552d68f5cc595b1f496514f5628c9",
+  "codeSha256": {
+    "packages/poker/src/mistake-experiment.ts": "836b04e4b7f8c9eaeda765693f1aea7d3c89822a47063c43cf8dae791d7d8d6c",
+    "packages/poker/src/fast-assessment.ts": "ec3841b685dcccbbca2dc641a2d745782b44d78741a22294c91031a39df9709b",
+    "packages/poker/src/fast-assessment-features.ts": "dd7723d01640b031dd7e0f1f84f5cf854a5207a57154b339614382ecba843b63",
+    "packages/poker/src/table-review.ts": "c302f406058632e77381dffd0d5892f7b040563dbf39ecf2aff5323ed9bb08e5",
+    "packages/poker/src/live-odds.ts": "c221e0a6db36a436a59a1a37fb71de2b313a2060fa159d9fe353f8e67c3f3786",
+    "packages/poker/src/table.ts": "a56d0dbf96a99bbbe2d310f9c77e3efbcc9a0dd252478cbcdee65bfd75738aca",
+    "packages/poker/src/index.ts": "bbe60412e45dbcc533cf577801c31dc5e68530aa1a5ece2b0ba8f36b7e8a9437",
+    "packages/poker/src/bot-policy.ts": "bdf8d84cc1aed01640c48659ead03e57092d70f7ee8afe254149202297399887",
+    "scripts/ml-mistake-experiment.ts": "05d2289c000027b7335cd61c4d1924bb479509542d561ac8dc6bf6fec8246541"
+  },
+  "planSha256": "50dcc5dcf1a8c71a4bc887d890479197cb3a4af784cf8986f0ef49b04691b3da",
+  "source": "synthetic-only; no application database read or written; no retraining or threshold selection",
+  "interpretation": "Teacher labels are conditional authored-bot forecasts with sampling uncertainty, not optimal poker or human skill. Premium-fold intent is an injected policy, not ground truth. Negative teacher labels include inconclusive comparisons. Raw threshold 0.5 diagnostics are not deployed gap predictions. Natural and premium-enriched cohorts must not be pooled as usage prevalence.",
+  "bootstrap": "2000 paired deal resamples, fixed seed 0x64a9cc21, percentile 95%; describes this synthetic experiment only",
+  "priorDatasets": [
+    {
+      "path": "data/ml/canonical-independent.jsonl",
+      "sha256": "19b30af084807e5da5f9a63edead01c8a10eaf62f3c58a4535a596c19195c83d",
+      "overlapGroups": []
+    },
+    {
+      "path": "data/ml/canonical-test.jsonl",
+      "sha256": "b1c9269fb4d3e21b99969ca0a49df7103f81f11af72efc5e7d3feac9da2bd880",
+      "overlapGroups": []
+    },
+    {
+      "path": "data/ml/canonical-validation.jsonl",
+      "sha256": "491a8a100ea0724feda270eb6d0e37bc7607393c83f117d9ef9aacdd3c3d3f5c",
+      "overlapGroups": []
+    },
+    {
+      "path": "data/ml/final-independent.jsonl",
+      "sha256": "e90480e7999a667eb49b4e3f269737ff609490085ee96a8d783ed9eb2817a6a6",
+      "overlapGroups": []
+    },
+    {
+      "path": "data/ml/pilot-a.jsonl",
+      "sha256": "46dcfa120d9d97384b85f5d810fb7c1b22a41dafb9c93ba437ca0338acc6d5d8",
+      "overlapGroups": []
+    },
+    {
+      "path": "data/ml/pilot-b.jsonl",
+      "sha256": "4847bd678569f7684fcf3ad4a3decdad586caf9ad1e95db50f4c85e6781f05b2",
+      "overlapGroups": []
+    },
+    {
+      "path": "data/ml/reject-duplicate.jsonl",
+      "sha256": "56dd2d3bbdf47068204967e09961df5f0a410ef2f06eada6bda7b1a22b1130f5",
+      "overlapGroups": []
+    },
+    {
+      "path": "data/ml/reject-features.jsonl",
+      "sha256": "d962221663e36ed5f42f79c47c53aac157f3afc95fdb82e0a71d869aaa450ae7",
+      "overlapGroups": []
+    },
+    {
+      "path": "data/ml/reject-partial.jsonl",
+      "sha256": "b0528277b9e333dfc6a423e593e081a48b77cd2b6f1d28f5fbb7fc3e1569f050",
+      "overlapGroups": []
+    },
+    {
+      "path": "data/ml/reject-source.jsonl",
+      "sha256": "bee7da02b8066b7d664801ba50d544000757da268b5acde57229ed8dad499e8a",
+      "overlapGroups": []
+    },
+    {
+      "path": "data/ml/reject-split.jsonl",
+      "sha256": "15bc32bf8ac23402ee25b1f22bfc8812ebacf3f859abb7d8a1326d1ead9201c7",
+      "overlapGroups": []
+    },
+    {
+      "path": "data/ml/reject-teacher.jsonl",
+      "sha256": "198e8068a7f94f6647758e04bdc37e6676f4fdb1316d1970d1eb43c8e913383b",
+      "overlapGroups": []
+    },
+    {
+      "path": "data/ml/resume-smoke.jsonl",
+      "sha256": "8b8ac009069b9e37306ecd113d5ec6ef40efcb63e46fff1261ca97dbf7dad105",
+      "overlapGroups": []
+    }
+  ],
+  "dataset": {
+    "path": "data/ml/mistake-experiment.jsonl",
+    "sha256": "3fbef7a8a132e125a7bda07b850343f927282d7c4f36dfbcd0455990ecf71121",
+    "groups": 600,
+    "decisions": 1200,
+    "synthetic": true
+  },
+  "cohorts": {
+    "natural": {
+      "control": {
+        "decisions": 400,
+        "teacherPositive": 143,
+        "teacherFlagRate": 0.3575,
+        "premiumDecisions": 14,
+        "premiumFolds": 1,
+        "premiumFoldRate": 0.07142857142857142,
+        "meanProbability": 0.36987006083891855,
+        "brier": 0.14040555251080178,
+        "rawThreshold05DiagnosticOnly": {
+          "tp": 102,
+          "fp": 47,
+          "tn": 210,
+          "fn": 41,
+          "accuracy": 0.78,
+          "precision": 0.6845637583892618,
+          "recall": 0.7132867132867133
+        },
+        "deployed": {
+          "ready": 187,
+          "coverage": 0.4675,
+          "agreementWhenReady": 0.9358288770053476,
+          "predictedGaps": 0,
+          "truePositiveGapFlags": 0,
+          "recall": 0,
+          "falseClearOnTeacherPositive": 12,
+          "falseClearRateOnTeacherPositive": 0.08391608391608392,
+          "abstainedOnTeacherPositive": 131,
+          "abstentionRateOnTeacherPositive": 0.916083916083916,
+          "uncertain": 213,
+          "unsupported": 0
+        },
+        "baselinesDiagnosticOnly": {
+          "premiumFoldRule": {
+            "tp": 1,
+            "fp": 0,
+            "tn": 257,
+            "fn": 142,
+            "accuracy": 0.645,
+            "precision": 1,
+            "recall": 0.006993006993006993
+          },
+          "sameCohortMajority": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 257,
+            "fn": 143,
+            "accuracy": 0.6425,
+            "precision": null,
+            "recall": 0,
+            "brierAtEmpiricalPrevalence": 0.22969375,
+            "note": "Post-hoc same-cohort descriptive baseline; no fitting/evaluation independence claim."
+          }
+        }
+      },
+      "leaky": {
+        "decisions": 400,
+        "teacherPositive": 153,
+        "teacherFlagRate": 0.3825,
+        "premiumDecisions": 14,
+        "premiumFolds": 12,
+        "premiumFoldRate": 0.8571428571428571,
+        "meanProbability": 0.39534936685898553,
+        "brier": 0.1375485486566782,
+        "rawThreshold05DiagnosticOnly": {
+          "tp": 113,
+          "fp": 47,
+          "tn": 200,
+          "fn": 40,
+          "accuracy": 0.7825,
+          "precision": 0.70625,
+          "recall": 0.738562091503268
+        },
+        "deployed": {
+          "ready": 176,
+          "coverage": 0.44,
+          "agreementWhenReady": 0.9375,
+          "predictedGaps": 0,
+          "truePositiveGapFlags": 0,
+          "recall": 0,
+          "falseClearOnTeacherPositive": 11,
+          "falseClearRateOnTeacherPositive": 0.0718954248366013,
+          "abstainedOnTeacherPositive": 142,
+          "abstentionRateOnTeacherPositive": 0.9281045751633987,
+          "uncertain": 224,
+          "unsupported": 0
+        },
+        "baselinesDiagnosticOnly": {
+          "premiumFoldRule": {
+            "tp": 12,
+            "fp": 0,
+            "tn": 247,
+            "fn": 141,
+            "accuracy": 0.6475,
+            "precision": 1,
+            "recall": 0.0784313725490196
+          },
+          "sameCohortMajority": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 247,
+            "fn": 153,
+            "accuracy": 0.6175,
+            "precision": null,
+            "recall": 0,
+            "brierAtEmpiricalPrevalence": 0.23619374999999998,
+            "note": "Post-hoc same-cohort descriptive baseline; no fitting/evaluation independence claim."
+          }
+        }
+      },
+      "paired": {
+        "changedDecisions": 11,
+        "teacherFlagRateDeltaLeakyMinusControl": 0.025,
+        "pairedDealBootstrap95": [
+          0.0125,
+          0.04
+        ],
+        "changedControlTeacherPositive": 1,
+        "changedLeakyTeacherPositive": 11,
+        "changedMeanProbabilityDelta": 0.9265202189115233,
+        "changedDeployedTruePositiveFlags": 0
+      }
+    },
+    "premiumChallenge": {
+      "control": {
+        "decisions": 200,
+        "teacherPositive": 45,
+        "teacherFlagRate": 0.225,
+        "premiumDecisions": 200,
+        "premiumFolds": 33,
+        "premiumFoldRate": 0.165,
+        "meanProbability": 0.23571265871549651,
+        "brier": 0.055202016604372045,
+        "rawThreshold05DiagnosticOnly": {
+          "tp": 34,
+          "fp": 2,
+          "tn": 153,
+          "fn": 11,
+          "accuracy": 0.935,
+          "precision": 0.9444444444444444,
+          "recall": 0.7555555555555555
+        },
+        "deployed": {
+          "ready": 158,
+          "coverage": 0.79,
+          "agreementWhenReady": 0.930379746835443,
+          "predictedGaps": 0,
+          "truePositiveGapFlags": 0,
+          "recall": 0,
+          "falseClearOnTeacherPositive": 11,
+          "falseClearRateOnTeacherPositive": 0.24444444444444444,
+          "abstainedOnTeacherPositive": 34,
+          "abstentionRateOnTeacherPositive": 0.7555555555555555,
+          "uncertain": 42,
+          "unsupported": 0
+        },
+        "baselinesDiagnosticOnly": {
+          "premiumFoldRule": {
+            "tp": 33,
+            "fp": 0,
+            "tn": 155,
+            "fn": 12,
+            "accuracy": 0.94,
+            "precision": 1,
+            "recall": 0.7333333333333333
+          },
+          "sameCohortMajority": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 155,
+            "fn": 45,
+            "accuracy": 0.775,
+            "precision": null,
+            "recall": 0,
+            "brierAtEmpiricalPrevalence": 0.174375,
+            "note": "Post-hoc same-cohort descriptive baseline; no fitting/evaluation independence claim."
+          }
+        }
+      },
+      "leaky": {
+        "decisions": 200,
+        "teacherPositive": 159,
+        "teacherFlagRate": 0.795,
+        "premiumDecisions": 200,
+        "premiumFolds": 158,
+        "premiumFoldRate": 0.79,
+        "meanProbability": 0.7422626695632988,
+        "brier": 0.03610195431573867,
+        "rawThreshold05DiagnosticOnly": {
+          "tp": 156,
+          "fp": 3,
+          "tn": 38,
+          "fn": 3,
+          "accuracy": 0.97,
+          "precision": 0.9811320754716981,
+          "recall": 0.9811320754716981
+        },
+        "deployed": {
+          "ready": 40,
+          "coverage": 0.2,
+          "agreementWhenReady": 0.925,
+          "predictedGaps": 0,
+          "truePositiveGapFlags": 0,
+          "recall": 0,
+          "falseClearOnTeacherPositive": 3,
+          "falseClearRateOnTeacherPositive": 0.018867924528301886,
+          "abstainedOnTeacherPositive": 156,
+          "abstentionRateOnTeacherPositive": 0.9811320754716981,
+          "uncertain": 160,
+          "unsupported": 0
+        },
+        "baselinesDiagnosticOnly": {
+          "premiumFoldRule": {
+            "tp": 156,
+            "fp": 2,
+            "tn": 39,
+            "fn": 3,
+            "accuracy": 0.975,
+            "precision": 0.9873417721518988,
+            "recall": 0.9811320754716981
+          },
+          "sameCohortMajority": {
+            "tp": 159,
+            "fp": 41,
+            "tn": 0,
+            "fn": 0,
+            "accuracy": 0.795,
+            "precision": 0.795,
+            "recall": 1,
+            "brierAtEmpiricalPrevalence": 0.16297499999999998,
+            "note": "Post-hoc same-cohort descriptive baseline; no fitting/evaluation independence claim."
+          }
+        }
+      },
+      "paired": {
+        "changedDecisions": 125,
+        "teacherFlagRateDeltaLeakyMinusControl": 0.57,
+        "pairedDealBootstrap95": [
+          0.5,
+          0.64
+        ],
+        "changedControlTeacherPositive": 9,
+        "changedLeakyTeacherPositive": 123,
+        "changedMeanProbabilityDelta": 0.8104800173564799,
+        "changedDeployedTruePositiveFlags": 0
+      }
+    }
+  }
+}

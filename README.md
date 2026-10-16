@@ -69,7 +69,17 @@ On flop and turn, **Draw density** shows the weighted share of each opponent's e
 
 Heads-up reviews also compare the immediate **fold/call/re-raise** response to each tested bet size by enumerating the same authored policy used by that bot. Specific example hands show the joint probability of that exact combination and response. These are exact averages under the stated model, not guaranteed human reactions. Multiway response trees are not replaced by independently multiplied fold estimates. No hidden opponent cards or future community cards inform the grids or response previews.
 
-**Replay this hand** appears after a hand finishes. It opens a separate saved game with the original recorded hole cards and future board, dealer, blinds, starting stacks, initial public reads, policy version and bot random seed. The original result and profit remain saved. Repeating your actions reproduces bot actions and outcomes; choosing different actions lets you explore another branch of the same deal. Opponent cards become hidden again. Modeled odds and review samples also repeat when the public situation is identical. Replays are labeled while that replayed hand is current. This is an interactive replay, not automatic playback of the original action history.
+**Replay this hand** appears after a hand finishes. It opens a separate saved game with the original recorded hole cards and future board, dealer, blinds, starting stacks, initial public reads, policy version and bot random seed. The original result and profit remain saved. Repeating your actions reproduces bot actions and outcomes; choosing different actions lets you explore another branch of the same deal. Opponent cards become hidden again. Modeled odds and review samples also repeat when the public situation is identical. Replay games retain their practice provenance across following hands. This is an interactive replay, not automatic playback of the original action history.
+
+**Decision history and branches:** Open **Hand history**, choose a recorded action, and select **Try another action** to continue from that exact decision in a separate practice game. Opponent cards and later cards stay hidden in historical views. Earlier hands and restarted attempts remain in an append-only journal; old saves are marked partial. Versioned commands preserve retry receipts and reject stale revisions or action IDs reused with another payload. The journal can rebuild the current state after a lost/corrupt cached projection.
+
+**Practice suggestions and decision data** can select supported bot-model gaps and export public decision-time features with explicit conditional labels. Replay/branch/restarted/partial data is excluded from independent training examples. The app now includes a separately trained fast screen of conditional teacher feedback; broad human leak detection and personalization remain future work. See [event sourcing and API contracts](docs/event-sourcing.md).
+
+**Quick assessment** gives local ML feedback without playing an action. Its first model supports fresh heads-up button openings at 100 BB against Mara, with fold/call/raise-to-20/raise-to-25 choices. On 1,000 fresh synthetic test choices, decisive predictions covered 53.7% and agreed with the detailed teacher 95.53% of the time. It currently predicts **no clear gap** only; folds, possible gaps and unsupported contexts abstain and retain detailed analysis. A no-clear-gap result can be inconclusive and does not prove good play. [Model card](packages/poker/models/README.md).
+
+A controlled synthetic premium-overfold test showed that raw probabilities tracked the injected pattern on an enriched challenge set, while the shipped assessment still made no positive mistake calls. In a matched 40-decision local benchmark, Quick assessment took 1.16 ms median versus 1,001 ms for the detailed hint (about 863× lower latency, with less output and frequent abstention). See the [experiment protocol, results and limits](docs/mistake-bot-experiment.md).
+
+**Local practice data** records decision views, displayed fast/hint/odds/guide feedback and accepted choices with pseudonymous session IDs, timestamps and journal links. Actions and their usage records commit together; missing assistance telemetry stays unknown. Nothing uploads automatically. Download a paged usage JSON export or a full SQLite backup, or clear usage while keeping games. Backups use committed WAL state and validated restore to a new path. [System design, measured performance and recovery](docs/usage-data-design.md).
 
 Each hand starts with 1,000 chips per seat, blinds 5/10, no ante and no rake. This is per-hand practice, not a continuous bankroll or elimination tournament. Play preflop through river using fold, check, call, and bet/raise. Raise amounts are **total chips committed this street**, not additional chips. The minimum and maximum are shown; “Set all-in” fills the amount before submission. Legal all-in calls, short raises, cumulative raise reopening, uncalled-chip returns, main/side pots, and split pots are handled server-side. Odd chips go clockwise from the dealer. Minimum raises/reopening are modeled on the [Poker TDA rules](https://www.pokertda.com/view-poker-tda-rules/); physical-table procedures are outside this app’s scope.
 
@@ -112,7 +122,7 @@ Call-price and pure-bluff break-even arithmetic is shown separately with its ass
 
 Graphs show cumulative recorded profit against completion times. Points support pointer and keyboard inspection; the hand-results table provides the underlying outcomes. Empty games get an empty state. Profit and review counts update after a hand completes; stacks reset to 1,000 each deal. Skill-score graphs are withheld because these bots are not validated strategy teachers.
 
-**Delete game** confirms the selected game and warns if a hand is unfinished. The API atomically deletes that table, hand statistics, numbering row, and command receipts. A revision check prevents deleting a game that changed in another tab; successful retries are harmless. Deleting another game leaves the active table intact. Deleting the current game clears the browser’s saved pointer. Existing game numbers never shift or get reused. Deleted games do not reappear after restarting.
+**Delete game** confirms the selected game and warns if a hand is unfinished. The API atomically deletes that table, event history, decision labels, hand statistics, numbering row, and command receipts. A revision check prevents deleting a game that changed in another tab; successful retries are harmless. Deleting another game leaves the active table intact. Deleting the current game clears the browser’s saved pointer. Existing game numbers never shift or get reused. Deleted games do not reappear after restarting.
 
 **Poker skill is not scored by the bot table.** General bot-response and assumed-continuation comparisons remain available for study, but do not become numeric skill grades, even when their arithmetic is exact or sampling intervals are narrow. Older saved grades are suppressed in API summaries; completed-hand upgrades preserve historical profit and completion dates. Exercise accuracy for original authored scenarios remains separate and depends on their explicitly stated assumptions.
 
@@ -153,11 +163,21 @@ apps/api/migrations/001_initial.sql  Exercise storage (schema version 1)
 apps/api/migrations/002_bot_tables.sql  Saved bot tables and command receipts (version 2)
 apps/api/migrations/003_bot_games.sql   Game dates and completed-hand statistics (version 3)
 apps/api/migrations/004_game_numbers.sql Stable game numbers (version 4)
+apps/api/migrations/010_table_events.sql Append-only events, request identities and labels
+apps/api/migrations/011_usage.sql Local usage identity, sessions and immutable facts
+apps/api/migrations/012_usage_compatibility.sql Data/cursor-preserving early-schema upgrade
+apps/api/src/table-journal.ts Event persistence and projection recovery
+apps/api/src/table-routes.ts Versioned/legacy table command and history routes
+apps/api/src/usage.ts Signed display acknowledgements and usage export
+apps/api/src/data-backup.ts WAL-consistent snapshot and validated new-path restore
 packages/poker/src/ Pure evaluator, deck, seeded deals, pot odds, range/equity logic
   showdown.ts        Shared showdown sampler/enumeration and uncertainty intervals
   live-odds.ts       Public-information live snapshots and range-based odds
   preflop-charts.ts  Licensed local opening baselines and strict public-history matching
   decision-rating.ts Conditional model agreement ratings and sampling safeguards
+  table-events.ts    Deterministic journal reducer and historical privacy boundary
+  fast-assessment.ts Public-only calibrated local ML screening
+packages/poker/models/ Trained artifact, aggregate report and reproduction card
   range-draws.ts     Weighted flush/open-ended draw classification
 packages/shared/src/ Zod request/exercise schemas and shared TypeScript types
  tests/             Vitest unit/integration tests and Playwright browser tests

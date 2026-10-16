@@ -1,0 +1,1071 @@
+{
+  "modelId": "opening-mara-et-v1",
+  "featureVersion": 1,
+  "provenance": {
+    "source": "synthetic only; no learner records",
+    "teacher": "analysis7; valueModel; inferredRange; pairedActionComparisons",
+    "trainingSamplesPerWorldSet": 200,
+    "canonicalSamplesPerWorldSet": 640,
+    "canonicalSeedScheme": "independent640-v1",
+    "calibrationAndThresholdTeacherSamples": 640,
+    "target": "analysis7 paired lower bound >0 chips versus a tested alternative; negative includes inconclusive teacher comparisons",
+    "continuation": "Theo authored policy for hero; Mara authored policy for opponent",
+    "samplingIntervals": "Bonferroni-adjusted paired approximate95% sampling intervals; not model validity",
+    "candidates": [
+      "fold",
+      "call",
+      "raise20",
+      "raise25"
+    ],
+    "features": [
+      "highRank",
+      "lowRank",
+      "pair",
+      "suited",
+      "gap",
+      "fold",
+      "call",
+      "raise",
+      "raiseToBB"
+    ],
+    "split": "group modulo10:0test,1validation,2-9train; validation modulo20 separates calibration1 from threshold selection11",
+    "versions": {
+      "python": "3.12.5",
+      "sklearn": "1.8.0",
+      "numpy": "2.4.0"
+    },
+    "filesSha256": {
+      "pilot-a.jsonl": "46dcfa120d9d97384b85f5d810fb7c1b22a41dafb9c93ba437ca0338acc6d5d8",
+      "pilot-b.jsonl": "4847bd678569f7684fcf3ad4a3decdad586caf9ad1e95db50f4c85e6781f05b2",
+      "canonical-independent.jsonl": "19b30af084807e5da5f9a63edead01c8a10eaf62f3c58a4535a596c19195c83d",
+      "canonical-validation.jsonl": "491a8a100ea0724feda270eb6d0e37bc7607393c83f117d9ef9aacdd3c3d3f5c",
+      "final-independent.jsonl": "e90480e7999a667eb49b4e3f269737ff609490085ee96a8d783ed9eb2817a6a6"
+    }
+  },
+  "dataset": {
+    "rows": 10000,
+    "groups": 2500,
+    "original1BBExperiment": {
+      "unknown": 6276,
+      "negative": 3680,
+      "positive": 44
+    },
+    "trainingRows": 8000,
+    "calibrationRows": 500,
+    "thresholdSelectionRows": 500,
+    "testRows": 1000,
+    "trainingPositiveRate": 0.19525
+  },
+  "thresholdSelection": {
+    "minimumPrecision": 0.9,
+    "minimumWilson95Lower": 0.75,
+    "minimumRows": 20,
+    "perCandidate": {
+      "fold": {
+        "positive": {
+          "count": 0,
+          "threshold": null,
+          "precision": null,
+          "wilson95Lower": null
+        },
+        "negative": {
+          "count": 0,
+          "threshold": null,
+          "precision": null,
+          "wilson95Lower": null
+        }
+      },
+      "call": {
+        "positive": {
+          "count": 0,
+          "threshold": null,
+          "precision": null,
+          "wilson95Lower": null
+        },
+        "negative": {
+          "count": 84,
+          "threshold": 0.19047619047619047,
+          "precision": 0.9047619047619048,
+          "wilson95Lower": 0.8231718131587017
+        }
+      },
+      "raise20": {
+        "positive": {
+          "count": 0,
+          "threshold": null,
+          "precision": null,
+          "wilson95Lower": null
+        },
+        "negative": {
+          "count": 124,
+          "threshold": 0.46153846153846156,
+          "precision": 0.9758064516129032,
+          "wilson95Lower": 0.9312787028423261
+        }
+      },
+      "raise25": {
+        "positive": {
+          "count": 0,
+          "threshold": null,
+          "precision": null,
+          "wilson95Lower": null
+        },
+        "negative": {
+          "count": 53,
+          "threshold": 0.19047619047619047,
+          "precision": 0.9056603773584906,
+          "wilson95Lower": 0.7974602432629857
+        }
+      }
+    }
+  },
+  "heldout200": {
+    "rows": 1000,
+    "groups": 250,
+    "positiveRate": 0.17,
+    "accuracyAtHalf": 0.793,
+    "brier": 0.14535324136519398,
+    "rocAuc": 0.852384833451453,
+    "confusionAtHalf": [
+      [
+        669,
+        161
+      ],
+      [
+        46,
+        124
+      ]
+    ],
+    "coverage": 0.546,
+    "readyAccuracy": 0.9725274725274725,
+    "gap": {
+      "count": 0,
+      "precision": null,
+      "wilson95Lower": null
+    },
+    "noClearGap": {
+      "count": 546,
+      "precision": 0.9725274725274725,
+      "wilson95Lower": 0.955170099502873
+    }
+  },
+  "heldoutIndependent640": {
+    "rows": 1000,
+    "groups": 250,
+    "positiveRate": 0.311,
+    "accuracyAtHalf": 0.828,
+    "brier": 0.11166546989730074,
+    "rocAuc": 0.9095968340341329,
+    "confusionAtHalf": [
+      [
+        613,
+        76
+      ],
+      [
+        96,
+        215
+      ]
+    ],
+    "coverage": 0.537,
+    "readyAccuracy": 0.9553072625698324,
+    "gap": {
+      "count": 0,
+      "precision": null,
+      "wilson95Lower": null
+    },
+    "noClearGap": {
+      "count": 537,
+      "precision": 0.9553072625698324,
+      "wilson95Lower": 0.9343609595292033
+    },
+    "groupBootstrap95": {
+      "resamples": 2000,
+      "unit": "independent deal group",
+      "coverage": [
+        0.511,
+        0.564
+      ],
+      "readyPrecision": [
+        0.9361284678204941,
+        0.9722222222222222
+      ]
+    }
+  },
+  "teacher200vs640Disagreement": 0.244,
+  "baselines200": {
+    "majority": {
+      "rows": 1000,
+      "groups": 250,
+      "positiveRate": 0.17,
+      "accuracyAtHalf": 0.83,
+      "brier": 0.14173756249999997,
+      "rocAuc": 0.5,
+      "confusionAtHalf": [
+        [
+          830,
+          0
+        ],
+        [
+          170,
+          0
+        ]
+      ],
+      "coverage": 0.25,
+      "readyAccuracy": 1,
+      "gap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      },
+      "noClearGap": {
+        "count": 250,
+        "precision": 1,
+        "wilson95Lower": 0.9848661527503766
+      }
+    },
+    "simpleHighPairFoldRule": {
+      "rows": 1000,
+      "groups": 250,
+      "positiveRate": 0.17,
+      "accuracyAtHalf": 0.829,
+      "brier": 0.1468,
+      "rocAuc": 0.5017363571934799,
+      "confusionAtHalf": [
+        [
+          828,
+          2
+        ],
+        [
+          169,
+          1
+        ]
+      ],
+      "coverage": 0.75,
+      "readyAccuracy": 0.924,
+      "gap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      },
+      "noClearGap": {
+        "count": 750,
+        "precision": 0.924,
+        "wilson95Lower": 0.9027990002823341
+      }
+    },
+    "logistic": {
+      "rows": 1000,
+      "groups": 250,
+      "positiveRate": 0.17,
+      "accuracyAtHalf": 0.815,
+      "brier": 0.11271181095111624,
+      "rocAuc": 0.8327923458540043,
+      "confusionAtHalf": [
+        [
+          750,
+          80
+        ],
+        [
+          105,
+          65
+        ]
+      ],
+      "coverage": 0.719,
+      "readyAccuracy": 0.9374130737134909,
+      "gap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      },
+      "noClearGap": {
+        "count": 719,
+        "precision": 0.9374130737134909,
+        "wilson95Lower": 0.9172780310711756
+      }
+    }
+  },
+  "baselines640": {
+    "majority": {
+      "rows": 1000,
+      "groups": 250,
+      "positiveRate": 0.311,
+      "accuracyAtHalf": 0.689,
+      "brier": 0.22767706249999994,
+      "rocAuc": 0.5,
+      "confusionAtHalf": [
+        [
+          689,
+          0
+        ],
+        [
+          311,
+          0
+        ]
+      ],
+      "coverage": 0.25,
+      "readyAccuracy": 0.976,
+      "gap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      },
+      "noClearGap": {
+        "count": 250,
+        "precision": 0.976,
+        "wilson95Lower": 0.94863720404899
+      }
+    },
+    "simpleHighPairFoldRule": {
+      "rows": 1000,
+      "groups": 250,
+      "positiveRate": 0.311,
+      "accuracyAtHalf": 0.692,
+      "brier": 0.2564,
+      "rocAuc": 0.5048231511254019,
+      "confusionAtHalf": [
+        [
+          689,
+          0
+        ],
+        [
+          308,
+          3
+        ]
+      ],
+      "coverage": 0.75,
+      "readyAccuracy": 0.8493333333333334,
+      "gap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      },
+      "noClearGap": {
+        "count": 750,
+        "precision": 0.8493333333333334,
+        "wilson95Lower": 0.8219545073018164
+      }
+    },
+    "logistic": {
+      "rows": 1000,
+      "groups": 250,
+      "positiveRate": 0.311,
+      "accuracyAtHalf": 0.763,
+      "brier": 0.15504473616245526,
+      "rocAuc": 0.8611996509223956,
+      "confusionAtHalf": [
+        [
+          646,
+          43
+        ],
+        [
+          194,
+          117
+        ]
+      ],
+      "coverage": 0.715,
+      "readyAccuracy": 0.8643356643356643,
+      "gap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      },
+      "noClearGap": {
+        "count": 715,
+        "precision": 0.8643356643356643,
+        "wilson95Lower": 0.8372799549499953
+      }
+    }
+  },
+  "perCandidate640": {
+    "fold": {
+      "rows": 250,
+      "groups": 250,
+      "positiveRate": 0.792,
+      "accuracyAtHalf": 0.78,
+      "brier": 0.15107481286514204,
+      "rocAuc": 0.7099844599844599,
+      "confusionAtHalf": [
+        [
+          6,
+          46
+        ],
+        [
+          9,
+          189
+        ]
+      ],
+      "coverage": 0,
+      "readyAccuracy": null,
+      "gap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      },
+      "noClearGap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      }
+    },
+    "call": {
+      "rows": 250,
+      "groups": 250,
+      "positiveRate": 0.188,
+      "accuracyAtHalf": 0.816,
+      "brier": 0.1151472166725562,
+      "rocAuc": 0.856304370611047,
+      "confusionAtHalf": [
+        [
+          197,
+          6
+        ],
+        [
+          40,
+          7
+        ]
+      ],
+      "coverage": 0.696,
+      "readyAccuracy": 0.9367816091954023,
+      "gap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      },
+      "noClearGap": {
+        "count": 174,
+        "precision": 0.9367816091954023,
+        "wilson95Lower": 0.89035624726762
+      }
+    },
+    "raise20": {
+      "rows": 250,
+      "groups": 250,
+      "positiveRate": 0.024,
+      "accuracyAtHalf": 0.976,
+      "brier": 0.016879315398517947,
+      "rocAuc": 0.9135928961748635,
+      "confusionAtHalf": [
+        [
+          244,
+          0
+        ],
+        [
+          6,
+          0
+        ]
+      ],
+      "coverage": 1,
+      "readyAccuracy": 0.976,
+      "gap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      },
+      "noClearGap": {
+        "count": 250,
+        "precision": 0.976,
+        "wilson95Lower": 0.94863720404899
+      }
+    },
+    "raise25": {
+      "rows": 250,
+      "groups": 250,
+      "positiveRate": 0.24,
+      "accuracyAtHalf": 0.74,
+      "brier": 0.16356053465298676,
+      "rocAuc": 0.7575,
+      "confusionAtHalf": [
+        [
+          166,
+          24
+        ],
+        [
+          41,
+          19
+        ]
+      ],
+      "coverage": 0.452,
+      "readyAccuracy": 0.9380530973451328,
+      "gap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      },
+      "noClearGap": {
+        "count": 113,
+        "precision": 0.9380530973451328,
+        "wilson95Lower": 0.8776287499252551
+      }
+    }
+  },
+  "learningCurve": [
+    {
+      "trainingGroups": 200,
+      "trainingRows": 800,
+      "validationBrierUncalibrated": 0.16303822084649405
+    },
+    {
+      "trainingGroups": 500,
+      "trainingRows": 2000,
+      "validationBrierUncalibrated": 0.15827200151708046
+    },
+    {
+      "trainingGroups": 1000,
+      "trainingRows": 4000,
+      "validationBrierUncalibrated": 0.15758411511670614
+    },
+    {
+      "trainingGroups": 2000,
+      "trainingRows": 8000,
+      "validationBrierUncalibrated": 0.1539082790543526
+    }
+  ],
+  "fitSeconds": 0.25653912499547005,
+  "teacherLatencyMs": {
+    "pilotPerCandidateMedian": 17.849109249998946,
+    "canonicalPerCandidateMedian": 57.29899475000025
+  },
+  "limitations": [
+    "Approximates a noisy authored conditional teacher, not GTO or poker skill.",
+    "No-clear-gap predicts lack of clear evidence; it does not establish good play.",
+    "Narrow opening-only support; subsequent decisions, stack depths, sizes, reads, opponents and policies are unsupported.",
+    "Test groups share poker hand classes with training; performance does not establish generalization to unseen strategies or real players.",
+    "Thresholds are validation-derived; heldout precision can be lower and is reported.",
+    "Synthetic data does not count as usage; no automatic training on learner data."
+  ],
+  "diagnosticIndependent640": {
+    "rows": 1000,
+    "groups": 250,
+    "positiveRate": 0.288,
+    "accuracyAtHalf": 0.825,
+    "brier": 0.11452549121678718,
+    "rocAuc": 0.9017024617665417,
+    "confusionAtHalf": [
+      [
+        626,
+        86
+      ],
+      [
+        89,
+        199
+      ]
+    ],
+    "coverage": 0.546,
+    "readyAccuracy": 0.9597069597069597,
+    "gap": {
+      "count": 0,
+      "precision": null,
+      "wilson95Lower": null
+    },
+    "noClearGap": {
+      "count": 546,
+      "precision": 0.9597069597069597,
+      "wilson95Lower": 0.9397472773147891
+    }
+  },
+  "perCandidateDiagnostic640": {
+    "fold": {
+      "rows": 250,
+      "groups": 250,
+      "positiveRate": 0.732,
+      "accuracyAtHalf": 0.716,
+      "brier": 0.18286846038102894,
+      "rocAuc": 0.6889731669521246,
+      "confusionAtHalf": [
+        [
+          5,
+          62
+        ],
+        [
+          9,
+          174
+        ]
+      ],
+      "coverage": 0,
+      "readyAccuracy": null,
+      "gap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      },
+      "noClearGap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      }
+    },
+    "call": {
+      "rows": 250,
+      "groups": 250,
+      "positiveRate": 0.148,
+      "accuracyAtHalf": 0.844,
+      "brier": 0.10951904532039922,
+      "rocAuc": 0.7957112041619083,
+      "confusionAtHalf": [
+        [
+          205,
+          8
+        ],
+        [
+          31,
+          6
+        ]
+      ],
+      "coverage": 0.724,
+      "readyAccuracy": 0.9226519337016574,
+      "gap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      },
+      "noClearGap": {
+        "count": 181,
+        "precision": 0.9226519337016574,
+        "wilson95Lower": 0.8743664824709688
+      }
+    },
+    "raise20": {
+      "rows": 250,
+      "groups": 250,
+      "positiveRate": 0,
+      "accuracyAtHalf": 1,
+      "brier": 0.002565714168893586,
+      "rocAuc": null,
+      "confusionAtHalf": [
+        [
+          250,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "coverage": 1,
+      "readyAccuracy": 1,
+      "gap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      },
+      "noClearGap": {
+        "count": 250,
+        "precision": 1,
+        "wilson95Lower": 0.9848661527503766
+      }
+    },
+    "raise25": {
+      "rows": 250,
+      "groups": 250,
+      "positiveRate": 0.272,
+      "accuracyAtHalf": 0.74,
+      "brier": 0.1631487449968269,
+      "rocAuc": 0.7786037491919845,
+      "confusionAtHalf": [
+        [
+          166,
+          16
+        ],
+        [
+          49,
+          19
+        ]
+      ],
+      "coverage": 0.46,
+      "readyAccuracy": 0.9304347826086956,
+      "gap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      },
+      "noClearGap": {
+        "count": 115,
+        "precision": 0.9304347826086956,
+        "wilson95Lower": 0.8687098549854324
+      }
+    }
+  },
+  "baselinesDiagnostic640": {
+    "majority": {
+      "rows": 1000,
+      "groups": 250,
+      "positiveRate": 0.288,
+      "accuracyAtHalf": 0.712,
+      "brier": 0.21365856249999995,
+      "rocAuc": 0.5,
+      "confusionAtHalf": [
+        [
+          712,
+          0
+        ],
+        [
+          288,
+          0
+        ]
+      ],
+      "coverage": 0.25,
+      "readyAccuracy": 1,
+      "gap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      },
+      "noClearGap": {
+        "count": 250,
+        "precision": 1,
+        "wilson95Lower": 0.9848661527503766
+      }
+    },
+    "simpleHighPairFoldRule": {
+      "rows": 1000,
+      "groups": 250,
+      "positiveRate": 0.288,
+      "accuracyAtHalf": 0.713,
+      "brier": 0.23960000000000004,
+      "rocAuc": 0.5027699750312109,
+      "confusionAtHalf": [
+        [
+          711,
+          1
+        ],
+        [
+          286,
+          2
+        ]
+      ],
+      "coverage": 0.75,
+      "readyAccuracy": 0.86,
+      "gap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      },
+      "noClearGap": {
+        "count": 750,
+        "precision": 0.86,
+        "wilson95Lower": 0.8333273984508458
+      }
+    },
+    "logistic": {
+      "rows": 1000,
+      "groups": 250,
+      "positiveRate": 0.288,
+      "accuracyAtHalf": 0.773,
+      "brier": 0.14586226201785224,
+      "rocAuc": 0.8783990714731585,
+      "confusionAtHalf": [
+        [
+          670,
+          42
+        ],
+        [
+          185,
+          103
+        ]
+      ],
+      "coverage": 0.719,
+      "readyAccuracy": 0.8776077885952712,
+      "gap": {
+        "count": 0,
+        "precision": null,
+        "wilson95Lower": null
+      },
+      "noClearGap": {
+        "count": 719,
+        "precision": 0.8776077885952712,
+        "wilson95Lower": 0.8516243271393571
+      }
+    }
+  },
+  "evaluationProtocol": "Initial diagnostic heldout revealed aggregate thresholds could hide weak per-candidate results. Per-candidate thresholds were then selected using original validation only. Final metrics use fresh250 independent groups (2500..4999 modulo10=0), not used in fit, calibration, threshold selection or design choices.",
+  "inferenceFixtures": [
+    {
+      "features": [
+        9,
+        5,
+        0,
+        0,
+        4,
+        1,
+        0,
+        0,
+        0
+      ],
+      "probability": 0.6097560975609756
+    },
+    {
+      "features": [
+        9,
+        5,
+        0,
+        0,
+        4,
+        0,
+        1,
+        0,
+        0
+      ],
+      "probability": 0.19047619047619047
+    },
+    {
+      "features": [
+        9,
+        5,
+        0,
+        0,
+        4,
+        0,
+        0,
+        1,
+        2
+      ],
+      "probability": 0.016304347826086956
+    },
+    {
+      "features": [
+        9,
+        5,
+        0,
+        0,
+        4,
+        0,
+        0,
+        1,
+        2.5
+      ],
+      "probability": 0.46153846153846156
+    },
+    {
+      "features": [
+        8,
+        2,
+        0,
+        0,
+        6,
+        1,
+        0,
+        0,
+        0
+      ],
+      "probability": 0.6097560975609756
+    },
+    {
+      "features": [
+        8,
+        2,
+        0,
+        0,
+        6,
+        0,
+        1,
+        0,
+        0
+      ],
+      "probability": 0.46153846153846156
+    },
+    {
+      "features": [
+        8,
+        2,
+        0,
+        0,
+        6,
+        0,
+        0,
+        1,
+        2
+      ],
+      "probability": 0.016304347826086956
+    },
+    {
+      "features": [
+        8,
+        2,
+        0,
+        0,
+        6,
+        0,
+        0,
+        1,
+        2.5
+      ],
+      "probability": 0.6
+    },
+    {
+      "features": [
+        11,
+        8,
+        0,
+        0,
+        3,
+        1,
+        0,
+        0,
+        0
+      ],
+      "probability": 0.8
+    },
+    {
+      "features": [
+        11,
+        8,
+        0,
+        0,
+        3,
+        0,
+        1,
+        0,
+        0
+      ],
+      "probability": 0.0851063829787234
+    },
+    {
+      "features": [
+        11,
+        8,
+        0,
+        0,
+        3,
+        0,
+        0,
+        1,
+        2
+      ],
+      "probability": 0.016304347826086956
+    },
+    {
+      "features": [
+        11,
+        8,
+        0,
+        0,
+        3,
+        0,
+        0,
+        1,
+        2.5
+      ],
+      "probability": 0.0851063829787234
+    },
+    {
+      "features": [
+        10,
+        10,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "probability": 0.8
+    },
+    {
+      "features": [
+        10,
+        10,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0
+      ],
+      "probability": 0.016304347826086956
+    },
+    {
+      "features": [
+        10,
+        10,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        2
+      ],
+      "probability": 0.29411764705882354
+    },
+    {
+      "features": [
+        10,
+        10,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        2.5
+      ],
+      "probability": 0.016304347826086956
+    },
+    {
+      "features": [
+        12,
+        11,
+        0,
+        0,
+        1,
+        1,
+        0,
+        0,
+        0
+      ],
+      "probability": 0.6097560975609756
+    },
+    {
+      "features": [
+        12,
+        11,
+        0,
+        0,
+        1,
+        0,
+        1,
+        0,
+        0
+      ],
+      "probability": 0.016304347826086956
+    },
+    {
+      "features": [
+        12,
+        11,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        2
+      ],
+      "probability": 0.016304347826086956
+    },
+    {
+      "features": [
+        12,
+        11,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        2.5
+      ],
+      "probability": 0.016304347826086956
+    }
+  ],
+  "runtimeLatency": {
+    "iterations": 10000,
+    "medianMs": 0.008207999999996218,
+    "p95Ms": 0.012041000000010627,
+    "p99Ms": 0.026750000000006935,
+    "scope": "Entire pure fastAssessment function: public snapshot, support validation, feature extraction, trees and calibration; excludes HTTP/SQLite",
+    "node": "v24.21.0"
+  }
+}

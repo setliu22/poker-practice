@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "modelId": "opening-mara-et-v1",
+  "measuredDate": "2026-10-15",
+  "runner": "Independent functional tester, Node 24.21.0, temporary file-backed SQLite, real loopback HTTP",
+  "warmupRequests": 20,
+  "measuredRequests": 200,
+  "medianMs": 0.696,
+  "p95Ms": 1.028,
+  "maxMs": 3.126,
+  "scope": "POST /api/v1/tables/:id/fast-assessment, including HTTP, current journal reconstruction, validation, local inference and signed display receipt; no database writes",
+  "teacherReference": {
+    "source": "fast-assessment-report.json teacherLatencyMs.canonicalPerCandidateMedian",
+    "medianAllocatedMs": 57.29899475000025,
+    "scope": "640-world synthetic teacher evaluates four candidate choices jointly; allocation is total timing divided by four. Not a directly equivalent HTTP or full gameplay benchmark."
+  },
+  "notes": [
+    "Measured while independent browser verification was running; timings depend on the host and load.",
+    "This adds a cheap assessment endpoint; existing action submission/full reviews still run detailed analysis.",
+    "No real learner records or synthetic examples are included in this aggregate report."
+  ]
+}

@@ -57,6 +57,29 @@ npm run test:browser -- tests/browser/preflop.spec.ts
 
 Failure traces/screenshots live under ignored `test-results/`. Inspect them when behavior/layout fails; a compilation pass is not visual or functional proof. Do not count a narrower rerun as a full-suite pass.
 
+## Fast assessment and usage-data recovery
+
+Normal app build/tests do not require Python, generation or retraining. Verify deployed inference and usage/backup contracts with:
+
+```sh
+npx vitest run tests/fast-assessment.test.ts tests/fast-assessment-api.test.ts tests/usage.test.ts tests/data-backup.test.ts
+npm run test:browser -- tests/browser/fast-assessment.spec.ts
+```
+
+Check public-only features, stale/unsupported/uncertain responses, unchanged gameplay on inference, signed display acknowledgement, exact retries, atomic action/usage rollback, unknown assistance when telemetry is missing/late, resumed cursor exports, deletion and restored journal/identity. File-backed tests check WAL/FULL, committed-WAL backup, integrity/checksum, new destinations, stale-sidecar rejection and old-schema cursor preservation. Never use learner data for destructive verification.
+
+For intentional offline model regeneration, use the [model card](packages/poker/models/README.md) with pinned Python/numpy/scikit-learn versions. Keep all synthetic rows in ignored `data/ml/` and retain frozen deal groups, versions, all candidate rows and provenance checks. Reevaluate and review a newly generated artifact/report before release. `npm run ml:benchmark` updates the aggregate report's timing measurements; pure inference excludes HTTP/SQLite and should not be claimed as total gameplay latency. The current model's decisive predictions are no-clear-gap only; fold and positive-gap detection abstain.
+
+For a manual recovery drill with a copied/test source:
+
+```sh
+npm run data:backup -- --source /path/to/test.sqlite --output /path/to/new-backup.sqlite
+npm run data:restore -- --source /path/to/new-backup.sqlite --output /path/to/new-restored.sqlite
+POKER_DB=/path/to/new-restored.sqlite npm run dev
+```
+
+Both outputs must be new paths. Confirm latest events/receipts/usage and a fresh test action after restoring, plus installation identity, SQLite integrity and foreign keys. Browser backup downloads contain the full private SQLite database; public usage JSON exports do not contain private deals. Existing backups/exports are separate copies when testing deletion.
+
 ## Optional real GTOpen integration
 
 Core tests use mocks/fixtures and do not prove an installed solver works. If the task changes the solver bridge and local installation is available, run:

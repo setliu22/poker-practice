@@ -73,7 +73,7 @@ test("all modes work and mobile layout stays within viewport", async ({
   await page.getByRole("button", { name: "Check my answer" }).click();
   await expect(
     page.getByRole("region", { name: "Answer feedback" }),
-  ).toContainText("threshold");
+  ).toContainText(/You need \d+\.\d{2}% equity for a break-even call\./);
   await page
     .getByRole("button", { name: "Equity vs. range", exact: true })
     .click();

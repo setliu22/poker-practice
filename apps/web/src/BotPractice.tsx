@@ -16,10 +16,18 @@ import { MoveRecommendation } from "./MoveRecommendation";
 import type { MoveAdvice } from "../../../packages/shared/src/assistant";
 import { StudyDialog } from "./StudyDialog";
 import { DecisionAssistant } from "./DecisionAssistant";
+import { DecisionHistory } from "./DecisionHistory";
 import { LiveOddsDialog } from "./LiveOddsDialog";
 import { PreflopGuideDialog } from "./PreflopGuide";
 import type { PreflopGuide } from "../../../packages/shared/src/preflop";
 import { positionName } from "../../../packages/shared/src/positions";
+import { FastAssessment } from "./FastAssessment";
+import { PracticeData } from "./PracticeData";
+import {
+  practiceSessionHeaders,
+  recordAssessmentShown,
+  recordDecisionViewed,
+} from "./usage-client";
 
 // Clockwise seats with the learner anchored at the bottom. Dense tables use
 // wider spacing at the ends of the oval so small screens remain readable.
@@ -92,7 +100,10 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
       ? undefined
       : {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...practiceSessionHeaders(),
+          },
           body: JSON.stringify(body),
         },
   );
@@ -138,6 +149,7 @@ export function BotPractice() {
   const oddsRequest = useRef(0);
   const oddsController = useRef<AbortController | null>(null);
   const oddsButton = useRef<HTMLButtonElement>(null);
+  const [oddsReceipt, setOddsReceipt] = useState<string | undefined>();
   const [guide, setGuide] = useState<PreflopGuide | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [guideLoading, setGuideLoading] = useState(false);
@@ -145,6 +157,7 @@ export function BotPractice() {
   const guideRequest = useRef(0);
   const guideController = useRef<AbortController | null>(null);
   const guideButton = useRef<HTMLButtonElement>(null);
+  const [guideReceipt, setGuideReceipt] = useState<string | undefined>();
   const [table, setTable] = useState<TableView | null>(null),
     [count, setCount] = useState(2),
     [dealMode, setDealMode] = useState<"random" | "easy">(() =>
@@ -157,6 +170,7 @@ export function BotPractice() {
     [raiseTo, setRaiseTo] = useState("");
   const [moveAdvice, setMoveAdvice] = useState<MoveAdvice | null>(null);
   const inFlight = useRef(false);
+  const branchIntents = useRef(new Map<string, string>());
   const gamesNav = useRef<HTMLButtonElement>(null);
   const setupButton = useRef<HTMLButtonElement>(null);
   const summary = useRef<HTMLElement>(null),
@@ -167,6 +181,7 @@ export function BotPractice() {
     oddsController.current?.abort();
     oddsController.current = null;
     setOdds(null);
+    setOddsReceipt(undefined);
     setOddsError("");
     setOddsLoading(false);
     setOddsOpen(false);
@@ -176,6 +191,7 @@ export function BotPractice() {
     guideController.current?.abort();
     guideController.current = null;
     setGuide(null);
+    setGuideReceipt(undefined);
     setGuideOpen(false);
     setGuideLoading(false);
     setGuideError("");
@@ -231,6 +247,22 @@ export function BotPractice() {
     if (table && !table.complete) actionHeading.current?.focus();
     previousComplete.current = !!table?.complete;
   }, [table]);
+  useEffect(() => {
+    if (
+      screen === "play" &&
+      table &&
+      !table.complete &&
+      table.actor === 0 &&
+      table.legal
+    )
+      recordDecisionViewed(table.id, table.revision);
+  }, [screen, table?.id, table?.revision]);
+  useEffect(() => {
+    if (oddsOpen && odds) recordAssessmentShown(oddsReceipt);
+  }, [oddsOpen, odds, oddsReceipt]);
+  useEffect(() => {
+    if (guideOpen && guide) recordAssessmentShown(guideReceipt);
+  }, [guideOpen, guide, guideReceipt]);
   useEffect(
     () => () => {
       ++oddsRequest.current;
@@ -275,6 +307,7 @@ export function BotPractice() {
       if (sequence !== guideRequest.current || controller.signal.aborted)
         return;
       setGuide(result as PreflopGuide);
+      setGuideReceipt(response.headers.get("X-Practice-Receipt") ?? undefined);
     } catch (err) {
       if (sequence !== guideRequest.current || controller.signal.aborted)
         return;
@@ -324,6 +357,7 @@ export function BotPractice() {
       )
         throw new Error("The hand changed. Check your odds again.");
       setOdds(result as LiveOdds);
+      setOddsReceipt(response.headers.get("X-Practice-Receipt") ?? undefined);
       setOddsOpen(true);
     } catch (err) {
       if (sequence !== oddsRequest.current || controller.signal.aborted) return;
@@ -577,19 +611,13 @@ export function BotPractice() {
             </>
           )}
           {study === "history" && (
-            <ol className="full-hand-history">
-              {table.history.map((entry, i) => (
-                <li key={i}>
-                  <span className="quiet">
-                    {entry.street} ·{" "}
-                    {entry.seat === null
-                      ? "Table"
-                      : table.players[entry.seat].name}
-                  </span>
-                  <span>{entry.text}</span>
-                </li>
-              ))}
-            </ol>
+            <DecisionHistory
+              key={`${table.id}/${table.revision}`}
+              table={table}
+              branchIntents={branchIntents.current}
+              onBranch={(branch) => save(branch)}
+              onReload={() => void resume(table.id)}
+            />
           )}
         </StudyDialog>
       )}
@@ -678,6 +706,7 @@ export function BotPractice() {
           Games
         </button>
       </nav>
+      <PracticeData />
       {screen === "play" && (
         <p className="table-rules">
           No-limit Hold’em · Blinds 5 / 10 chips · 1,000 chips per player, reset
@@ -746,6 +775,12 @@ export function BotPractice() {
               <strong>Game {currentGame.gameNumber}</strong>
               {table?.replayOf && (
                 <span className="pill">Replay · Hand {table.handNumber}</span>
+              )}
+              {table?.branchOf && (
+                <span className="pill">
+                  Practice branch · Hand {table.branchOf.handNumber} · Decision{" "}
+                  {table.branchOf.sequence}
+                </span>
               )}
               <span>{formatChips(currentGame.profit)} chips</span>
               <span>{currentGame.hands} hands</span>
@@ -992,6 +1027,12 @@ export function BotPractice() {
                       table={table}
                       onAdvice={setMoveAdvice}
                       onSize={(amount) => setRaiseTo(String(amount))}
+                    />
+                    <FastAssessment
+                      key={`quick/${table.id}/${table.revision}`}
+                      table={table}
+                      raiseTo={raiseTo}
+                      busy={busy}
                     />
                     <p className="quiet">
                       {legal.toCall

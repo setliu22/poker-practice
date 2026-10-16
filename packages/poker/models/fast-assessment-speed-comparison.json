@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "codeSha256": {
+    "scripts/ml-compare-speed.ts": "bfa813b36ef1fce4e6588094b7efdf8d84a37cfed0bfdf91ee8583493b2dcd45",
+    "apps/api/src/app.ts": "af26e30aa38fa1653fdcf7a8e9601fd8e1a9f1a2b0d3b041631ac66f5dce7905",
+    "apps/api/src/table-routes.ts": "d1b809c24e712e6c76353d22d2aa0d9f5fe9df81397469e21157ee54c1af85ae",
+    "apps/api/src/table-journal.ts": "28fb7aed942c909a85b7ba6de7974cec9b5182b7403d023a09bf66503df76d6b",
+    "apps/api/src/assistant-jobs.ts": "7c5d94b8243890079b1503bcf31f8f7b82e31d877f9b4438e5e1e6d932e3aca7",
+    "apps/api/src/assistant-worker.ts": "f41e3b40e2950da313a52068651a5d1ed8b9c3860e5887439ce8366fb44380c3",
+    "packages/poker/src/decision-assistant.ts": "fe3227e53c1af577db03f842b345b167e69c453f3fd02bb1bea77bc5909ddaf4",
+    "packages/poker/src/table-review.ts": "c302f406058632e77381dffd0d5892f7b040563dbf39ecf2aff5323ed9bb08e5",
+    "packages/poker/src/fast-assessment.ts": "ec3841b685dcccbbca2dc641a2d745782b44d78741a22294c91031a39df9709b",
+    "packages/poker/src/fast-assessment-features.ts": "dd7723d01640b031dd7e0f1f84f5cf854a5207a57154b339614382ecba843b63"
+  },
+  "createdAt": "2026-10-16T04:03:50.839Z",
+  "modelId": "opening-mara-et-v1",
+  "modelSha256": "c89f8d0adfe7062dc1b30831edd353ba000552d68f5cc595b1f496514f5628c9",
+  "source": "synthetic only; temporary database; no usage records",
+  "protocol": {
+    "groups": {
+      "start": 3000000,
+      "count": 40,
+      "warmups": 5
+    },
+    "scope": "Same fresh initial heads-up100BB button/Mara decisions and proposed call action for both methods; excludes state setup and process/server startup",
+    "quick": "Production fast endpoint including journal read, validation, trained inference and signed receipt",
+    "normal": "Actual Show move hint assistant endpoint:1600 worlds, opponent responses, all tested action EVs, paired comparisons, recommendation, fresh built worker on every request",
+    "order": "Alternating quick/normal request order per distinct deal, sequential, no concurrent requests, no response cache",
+    "runtime": "production JS bundles built from current source",
+    "firstRequests": "Reported separately; not included in warmed summaries",
+    "inProcess": "Separate actual algorithm function boundaries after5 dedicated warmup pairs on same first20 paired decisions; excludes HTTP/DB/HMAC/worker overhead"
+  },
+  "environment": {
+    "node": "v24.21.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M1 Pro",
+    "logicalCpus": 8
+  },
+  "coldHttpMs": {
+    "quick": 36.134208,
+    "normal": 1159.890375
+  },
+  "http": {
+    "quick": {
+      "count": 40,
+      "medianMs": 1.1606669999996484,
+      "p95Ms": 1.6447767500019828,
+      "minMs": 0.8010829999984708,
+      "maxMs": 2.2154999999984284,
+      "totalMs": 47.892083999989154
+    },
+    "normal": {
+      "count": 40,
+      "medianMs": 1001.4617499999995,
+      "p95Ms": 1161.9928565500038,
+      "minMs": 919.3923749999994,
+      "maxMs": 1257.594333000001,
+      "totalMs": 40894.269791
+    },
+    "ratioOfMedians": 862.8329658724706,
+    "medianPairedSpeedup": 880.7034773668245,
+    "p95LatencyRatio": 706.4745148839215,
+    "readyCount": 23,
+    "uncertainCount": 17
+  },
+  "inProcess": {
+    "quick": {
+      "count": 20,
+      "medianMs": 0.05250000000523869,
+      "p95Ms": 0.0832878500012157,
+      "minMs": 0.01508299999841256,
+      "maxMs": 0.0927090000041062,
+      "totalMs": 0.9169560000154888
+    },
+    "normal": {
+      "count": 20,
+      "medianMs": 774.9505834999982,
+      "p95Ms": 888.7343880999982,
+      "minMs": 712.6364170000015,
+      "maxMs": 910.7255409999998,
+      "totalMs": 15660.127043999993
+    },
+    "ratioOfMedians": 14760.963493765144
+  },
+  "rawSha256": "a5ea3fbcaa6a5385ccc4087101e5aed0f62d540a1d1046b57577380b6f0b3eb5",
+  "limitations": [
+    "Timing compares response latency, not equivalent output quality: quick may abstain and only screens for no clear gap; normal returns detailed sampled values and recommendations.",
+    "Warmed local repeated benchmark; hardware/load dependent. Process boot and browser rendering excluded.",
+    "No total game throughput or full action-submission speedup is claimed.",
+    "The normal endpoint runs1600 sampled worlds; the separate mistake experiment teacher uses640."
+  ]
+}

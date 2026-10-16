@@ -104,6 +104,7 @@ export function gameStats(db: Database.Database): GameStats[] {
       `SELECT t.id,g.started_at,n.number,
       json_extract(t.state,'$.revision') AS revision,
       json_extract(t.state,'$.replayOf') AS replay_of,
+      json_extract(t.state,'$.branchOf') AS branch_of,
       json_array_length(t.state,'$.players') AS players,
       json_extract(t.state,'$.handNumber') AS hand_number,
       json_extract(t.state,'$.complete') AS complete
@@ -113,6 +114,7 @@ export function gameStats(db: Database.Database): GameStats[] {
     id: string;
     revision: number;
     replay_of: string | null;
+    branch_of: string | null;
     players: number;
     hand_number: number;
     complete: number;
@@ -153,6 +155,7 @@ export function gameStats(db: Database.Database): GameStats[] {
       gameNumber: row.number ?? 0,
       revision: row.revision,
       ...(row.replay_of ? { replayOf: JSON.parse(row.replay_of) } : {}),
+      ...(row.branch_of ? { branchOf: JSON.parse(row.branch_of) } : {}),
       startedAt: row.started_at,
       players: row.players,
       hands: hands.length,
