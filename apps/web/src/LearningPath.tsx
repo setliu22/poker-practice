@@ -76,6 +76,11 @@ export function LearningPath() {
     [error, setError] = useState(""),
     [stale, setStale] = useState(false);
   const [confirm, setConfirm] = useState(false);
+  const [dataError, setDataError] = useState("");
+  const [clearError, setClearError] = useState("");
+  const courseHeading = useRef<HTMLHeadingElement>(null);
+  const dataRetry = useRef<() => Promise<void>>(async () => {});
+  const clearRetry = useRef<() => Promise<void>>(async () => {});
   const feedbackHeading = useRef<HTMLHeadingElement>(null);
   const returnDialogFocus = useRef(false);
   const heading = useRef<HTMLHeadingElement>(null),
@@ -93,18 +98,30 @@ export function LearningPath() {
     }
     return saved.current.acks[name];
   }
-  async function run(operation: () => Promise<void>) {
+  async function run(
+    operation: () => Promise<void>,
+    channel: "lesson" | "data" | "clear" = "lesson",
+  ) {
     if (lock.current) return;
     lock.current = true;
     setBusy(true);
-    setError("");
-    setStale(false);
-    retry.current = operation;
+    const setOperationError =
+      channel === "data"
+        ? setDataError
+        : channel === "clear"
+          ? setClearError
+          : setError;
+    const operationRetry =
+      channel === "data" ? dataRetry : channel === "clear" ? clearRetry : retry;
+    setOperationError("");
+    if (channel === "lesson") setStale(false);
+    operationRetry.current = operation;
     try {
       await operation();
     } catch (e) {
-      setError((e as Error).message);
-      setStale(e instanceof PathError && e.status === 409);
+      setOperationError((e as Error).message);
+      if (channel === "lesson")
+        setStale(e instanceof PathError && e.status === 409);
     } finally {
       lock.current = false;
       setBusy(false);
@@ -175,7 +192,12 @@ export function LearningPath() {
     void run(load);
   }, []);
   useEffect(() => {
-    (feedback ? feedbackHeading : heading).current?.focus();
+    (instance
+      ? feedback
+        ? feedbackHeading
+        : heading
+      : courseHeading
+    ).current?.focus();
   }, [
     instance?.instanceId,
     instance?.question?.id,
@@ -342,7 +364,7 @@ export function LearningPath() {
       anchor.download = "poker-learning-path.json";
       anchor.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-    });
+    }, "data");
   }
   return (
     <section
@@ -351,7 +373,9 @@ export function LearningPath() {
       aria-label="Beginner learning path"
     >
       <span className="eyebrow">Beginner path · Local progress</span>
-      <h1>{catalog?.title ?? "Loading beginner path…"}</h1>
+      <h1 ref={courseHeading} tabIndex={-1}>
+        {catalog?.title ?? "Loading beginner path…"}
+      </h1>
       {progress && (
         <p>
           {progress.completedLessons} lessons completed ·{" "}
@@ -565,6 +589,18 @@ export function LearningPath() {
           </button>
         </>
       )}
+      {dataError && (
+        <div role="alert">
+          <p>{dataError}</p>
+          <button
+            className="secondary"
+            disabled={busy}
+            onClick={() => void run(dataRetry.current, "data")}
+          >
+            Retry download
+          </button>
+        </div>
+      )}
       <div className="path-data-controls">
         <button
           className="secondary"
@@ -597,6 +633,18 @@ export function LearningPath() {
             Earlier exercises, table history and downloaded copies remain
             separate.
           </p>
+          {clearError && (
+            <div role="alert">
+              <p>{clearError}</p>
+              <button
+                className="secondary"
+                disabled={busy}
+                onClick={() => void run(clearRetry.current, "clear")}
+              >
+                Retry clear progress
+              </button>
+            </div>
+          )}
           <button className="secondary" onClick={closeDialog}>
             Keep progress
           </button>
@@ -606,6 +654,9 @@ export function LearningPath() {
             onClick={() =>
               void run(async () => {
                 await api("/progress", undefined, "DELETE");
+                setError("");
+                setStale(false);
+                setDataError("");
                 saved.current = {
                   sessionId: saved.current.sessionId,
                   acks: {},
@@ -615,7 +666,7 @@ export function LearningPath() {
                 setFeedback(null);
                 await refresh();
                 closeDialog();
-              })
+              }, "clear")
             }
           >
             Confirm clear path progress

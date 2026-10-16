@@ -124,6 +124,19 @@ test("beginner lesson preserves a committed answer retry, resumes, reviews and c
   );
   expect(kinds.filter((k: string) => k === "lesson-completed")).toHaveLength(1);
   expect(kinds).toContain("lesson-resumed");
+  const completedCheckpoint = await page.evaluate(() =>
+    localStorage.getItem("poker-learning-path-v1"),
+  );
+  await page.getByRole("button", { name: "Back to path", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: "Poker foundations", exact: true }),
+  ).toBeFocused();
+  await page.evaluate(
+    (value) => localStorage.setItem("poker-learning-path-v1", value!),
+    completedCheckpoint,
+  );
+  await page.reload();
   await page.getByRole("button", { name: "Review missed ideas" }).click();
   await expect(
     page.getByRole("heading", { name: "No bet to match", exact: true }),
@@ -315,3 +328,91 @@ test("lesson and clear-dialog controls work with the keyboard alone", async ({
   await page.keyboard.press("Escape");
   await expect(clear).toBeFocused();
 });
+
+for (const acknowledgement of ["presented", "feedback-shown"]) {
+  test(`failed ${acknowledgement} remains retryable after a successful download`, async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const acks: unknown[] = [];
+    await page.route(`**/questions/*/${acknowledgement}`, async (route) => {
+      acks.push(route.request().postDataJSON());
+      if (acks.length === 1)
+        await route.fulfill({
+          status: 503,
+          json: { error: "Acknowledgement temporarily unavailable" },
+        });
+      else await route.continue();
+    });
+    await page
+      .getByRole("button", { name: "Start Table flow and legal actions" })
+      .click();
+    if (acknowledgement === "feedback-shown") {
+      await page.getByRole("radio", { name: "Check", exact: true }).check();
+      await page
+        .getByRole("button", { name: "Submit answer", exact: true })
+        .click();
+    }
+    await expect(page.getByRole("alert")).toContainText(
+      "Acknowledgement temporarily unavailable",
+    );
+    const downloaded = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download path data" }).click();
+    await downloaded;
+    await expect(page.getByRole("alert")).toContainText(
+      "Acknowledgement temporarily unavailable",
+    );
+    await page.getByRole("button", { name: "Try again", exact: true }).click();
+    if (acknowledgement === "presented")
+      await expect(
+        page.getByRole("radio", { name: "Check", exact: true }),
+      ).toBeEnabled();
+    else
+      await expect(
+        page.getByRole("button", { name: "Continue lesson" }),
+      ).toBeEnabled();
+    expect(acks).toHaveLength(2);
+    expect(acks[1]).toEqual(acks[0]);
+  });
+}
+
+for (const failedStep of ["delete", "refresh"]) {
+  test(`clear ${failedStep} failure has an accessible retry inside the modal`, async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(
+      page.getByRole("button", { name: "Start Table flow and legal actions" }),
+    ).toBeEnabled();
+    let failed = false;
+    await page.route("**/api/v1/learning-path/progress", async (route) => {
+      if (
+        !failed &&
+        route.request().method() ===
+          (failedStep === "delete" ? "DELETE" : "GET")
+      ) {
+        failed = true;
+        await route.fulfill({
+          status: 503,
+          json: { error: "Clear operation temporarily unavailable" },
+        });
+      } else await route.continue();
+    });
+    const clear = page.getByRole("button", {
+      name: "Clear path progress",
+      exact: true,
+    });
+    await clear.click();
+    await page
+      .getByRole("button", { name: "Confirm clear path progress" })
+      .click();
+    const modal = page.getByRole("dialog");
+    await expect(modal.getByRole("alert")).toContainText(
+      "Clear operation temporarily unavailable",
+    );
+    await modal.getByRole("button", { name: "Retry clear progress" }).click();
+    await expect(modal).toHaveCount(0);
+    await expect(clear).toBeFocused();
+    await expect(page.getByText("0 answers attempted")).toBeVisible();
+  });
+}
