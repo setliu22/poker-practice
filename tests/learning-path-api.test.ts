@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import Database from "better-sqlite3";
 import { openDatabase } from "../apps/api/src/database";
 import { createApp } from "../apps/api/src/app";
+import * as learningContent from "../apps/api/src/learning-path-content";
 import {
   learningPathEventSchema,
   learningPathInstanceStateSchema,
@@ -252,6 +253,121 @@ describe("local learning path ledger", () => {
       contentId: "table-flow",
       skillId: "legal-actions",
     });
+    expect(db.prepare("SELECT COUNT(*) n FROM usage_events").get()).toEqual({
+      n: 0,
+    });
+  });
+  it("suggests the most recent paired mistake rather than the most frequent skill, using cursor and catalog order", async () => {
+    const catalog = learningContent.getLearningPathCatalog();
+    catalog.units[0]!.lessons = [
+      { contentId: "older-rules", title: "Older rules", skillId: "rules" },
+      { contentId: "first-odds", title: "First odds lesson", skillId: "odds" },
+      {
+        contentId: "second-odds",
+        title: "Second odds lesson",
+        skillId: "odds",
+      },
+    ];
+    vi.spyOn(learningContent, "getLearningPathCatalog").mockReturnValue(
+      catalog,
+    );
+    const installation = db
+      .prepare("SELECT id FROM usage_installation")
+      .get() as { id: string };
+    function factPair(
+      skillId: string,
+      contentId: string,
+      correct = false,
+      paired = true,
+    ) {
+      const envelope = {
+        eventId: randomUUID(),
+        schemaVersion: 1,
+        installationId: installation.id,
+        sessionId: randomUUID(),
+        instanceId: randomUUID(),
+        contentId,
+        contentVersion: "1",
+        createdAt: "2026-10-16T12:00:00.000Z",
+      };
+      const requestId = randomUUID(),
+        questionId = "decision";
+      const facts = [
+        {
+          kind: "lesson-opened",
+          payload: {
+            questionOrder: [questionId],
+            selectionReason: "Projection fixture.",
+          },
+        },
+        ...(paired
+          ? [
+              {
+                kind: "answer-submitted",
+                payload: {
+                  questionId,
+                  requestId,
+                  answer: { kind: "choice", choiceId: "check" },
+                },
+              },
+            ]
+          : []),
+        {
+          kind: "feedback-generated",
+          payload: {
+            questionId,
+            requestId,
+            feedback: {
+              correct,
+              correctAnswer: { kind: "choice", choiceId: "call" },
+              explanation: "Synthetic projection feedback.",
+              takeaway: "Synthetic projection takeaway.",
+              skillId,
+            },
+          },
+        },
+      ];
+      db.transaction(() => {
+        for (const fact of facts) {
+          const event = learningPathEventSchema.parse({
+            ...envelope,
+            ...fact,
+            eventId: randomUUID(),
+            cursor: 1,
+          });
+          db.prepare(
+            "INSERT INTO learning_path_events(event_id,schema_version,installation_id,session_id,instance_id,content_id,content_version,kind,created_at,payload) VALUES(?,?,?,?,?,?,?,?,?,?)",
+          ).run(
+            event.eventId,
+            1,
+            event.installationId,
+            event.sessionId,
+            event.instanceId,
+            event.contentId,
+            event.contentVersion,
+            event.kind,
+            event.createdAt,
+            JSON.stringify(event.payload),
+          );
+        }
+      })();
+    }
+    expect(
+      (await request(app).get(`${base}/progress`)).body.reviewSuggestion,
+    ).toBeNull();
+    factPair("rules", "older-rules");
+    factPair("rules", "older-rules");
+    factPair("odds", "second-odds");
+    // Equal wall times exercise cursor recency; two rules mistakes must lose
+    // to the newer odds mistake, with the first matching catalog lesson chosen.
+    expect(
+      (await request(app).get(`${base}/progress`)).body.reviewSuggestion,
+    ).toMatchObject({ contentId: "first-odds", skillId: "odds" });
+    factPair("rules", "older-rules", true);
+    factPair("rules", "older-rules", false, false);
+    expect(
+      (await request(app).get(`${base}/progress`)).body.reviewSuggestion,
+    ).toMatchObject({ contentId: "first-odds", skillId: "odds" });
     expect(db.prepare("SELECT COUNT(*) n FROM usage_events").get()).toEqual({
       n: 0,
     });

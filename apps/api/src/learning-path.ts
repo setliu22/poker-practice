@@ -243,21 +243,46 @@ export function learningPathRoutes(db: Database.Database): Router {
         if (feedback.correct) result.transferCorrect++;
       }
     }
-    const weak = Object.entries(result.bySkill)
-      .filter(([, s]) => s.incorrect > 0)
-      .sort(
-        (a, b) => b[1].incorrect - a[1].incorrect || a[0].localeCompare(b[0]),
-      )[0];
-    if (weak) {
-      const lesson = getLearningPathCatalog()
-        .units.flatMap((u) => u.lessons)
-        .find((l) => l.skillId === weak[0]);
-      if (lesson)
-        result.reviewSuggestion = {
-          contentId: lesson.contentId,
-          skillId: weak[0],
-          reason: "Review a skill with mistakes in your saved answers.",
-        };
+    const mistakes = events
+      .filter(
+        (
+          event,
+        ): event is Extract<
+          LearningPathEvent,
+          { kind: "feedback-generated" }
+        > =>
+          event.kind === "feedback-generated" &&
+          !event.payload.feedback.correct &&
+          events.some(
+            (answer) =>
+              answer.kind === "answer-submitted" &&
+              answer.cursor < event.cursor &&
+              answer.installationId === event.installationId &&
+              answer.sessionId === event.sessionId &&
+              answer.instanceId === event.instanceId &&
+              answer.contentId === event.contentId &&
+              answer.contentVersion === event.contentVersion &&
+              answer.payload.questionId === event.payload.questionId &&
+              answer.payload.requestId === event.payload.requestId,
+          ),
+      )
+      .sort((a, b) => b.cursor - a.cursor);
+    const lessons = getLearningPathCatalog().units.flatMap(
+      (unit) => unit.lessons,
+    );
+    for (const mistake of mistakes) {
+      // Cursors order committed feedback independently of equal wall times.
+      // The first catalog match breaks ties between lessons for that skill.
+      const lesson = lessons.find(
+        (item) => item.skillId === mistake.payload.feedback.skillId,
+      );
+      if (!lesson) continue;
+      result.reviewSuggestion = {
+        contentId: lesson.contentId,
+        skillId: lesson.skillId,
+        reason: "Review the skill from your most recent incorrect answer.",
+      };
+      break;
     }
     return result;
   }
