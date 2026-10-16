@@ -1,3 +1,4 @@
+import { LearningPath } from "./LearningPath";
 import { PreflopWalkthrough } from "./PreflopWalkthrough";
 import { ReadLesson, ReadProgressSummary } from "./ReadLesson";
 import { useEffect, useRef, useState } from "react";
@@ -436,16 +437,28 @@ export function LearningProgressSummary({ refresh }: { refresh: unknown }) {
       active = false;
     };
   }, [refresh]);
-  if (!data?.attempts) return <ReadProgressSummary refresh={refresh} />;
+  if (!data?.attempts)
+    return (
+      <>
+        <p className="quiet">
+          Legacy learning summaries · incomplete history. Separate from beginner
+          path progress.
+        </p>
+        <ReadProgressSummary refresh={refresh} />
+      </>
+    );
   return (
     <section className="panel">
       <ReadProgressSummary refresh={refresh} />
-      <h2>Learning progress</h2>
+      <h2>Legacy learning progress</h2>
       <p>
         Decisions correct: {data.decisionsCorrect}/{data.attempts} · Reasons
         correct: {data.reasonsCorrect}/{data.attempts}
       </p>
-      <p className="quiet">Results for these supplied lesson situations.</p>
+      <p className="quiet">
+        Incomplete history for these supplied lesson situations; separate from
+        beginner path progress.
+      </p>
       <details>
         <summary>Learning details</summary>
         <p>
@@ -495,13 +508,18 @@ export function Learn() {
     return (
       <>
         <button className="secondary" onClick={() => setEarlier(false)}>
-          Back to preflop walkthrough
+          Back to beginner path
         </button>
         <EarlierLearn />
       </>
     );
   return (
     <>
+      <LearningPath />
+      <p className="quiet">
+        Legacy lessons · incomplete history. Earlier summaries are separate from
+        beginner path progress.
+      </p>
       <section className="panel cash-entry">
         <span className="eyebrow">Online cash · 2–9 seats</span>
         <h2>Online cash Decision Lab</h2>

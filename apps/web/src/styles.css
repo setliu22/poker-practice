@@ -3561,3 +3561,45 @@ main:has(.bot-page-heading) {
   .preflop-walkthrough .walkthrough-grid .learning-seat strong { font-size:.82rem; }
   .preflop-walkthrough .walkthrough-settings { align-items:stretch; }
 }
+
+.learning-path {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.learning-path fieldset {
+  min-width: 0;
+  margin: 1rem 0;
+}
+.learning-path fieldset label {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.6rem 0;
+}
+.learning-path input[type="radio"] {
+  flex: 0 0 auto;
+}
+.learning-path input[type="number"] {
+  max-width: 8rem;
+  min-width: 0;
+}
+.learning-path button {
+  max-width: 100%;
+  white-space: normal;
+  margin: 0.3rem 0.4rem 0.3rem 0;
+}
+.path-data-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+.learning-path dialog {
+  max-width: min(30rem, calc(100vw - 2rem));
+  box-sizing: border-box;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+}
+.learning-path dialog::backdrop {
+  background: #0008;
+}
