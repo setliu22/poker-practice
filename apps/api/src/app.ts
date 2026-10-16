@@ -1,3 +1,4 @@
+import { learningPathRoutes, clearLearningPathProgress } from "./learning-path";
 import { readLessonRoutes } from "./read-lesson";
 import { learningRoutes } from "./learning";
 import { cashPracticeRoutes, cashDrillExport } from "./cash-practice";
@@ -45,6 +46,7 @@ export function createApp(db: Database.Database) {
   app.use("/api/learning/read", readLessonRoutes(db));
   app.use("/api/cash-practice", cashPracticeRoutes(db));
   app.use("/api/v1/usage", usageRoutes(db));
+  app.use("/api/v1/learning-path", learningPathRoutes(db));
   // Preserve the latest available completed hand for tables created before game tracking.
   for (const row of db.prepare("SELECT id FROM bot_tables").all() as {
     id: string;
@@ -443,6 +445,7 @@ export function createApp(db: Database.Database) {
   );
   app.delete("/api/progress", (_req, res) => {
     db.transaction(() => {
+      clearLearningPathProgress(db);
       db.prepare("DELETE FROM attempts").run();
       db.prepare("DELETE FROM exercises").run();
       db.prepare("DELETE FROM learning_questions").run();

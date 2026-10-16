@@ -113,7 +113,7 @@ describe("local recoverable snapshots", () => {
     await rm(`${backup}.manifest.json`);
     await expect(
       restoreDataBackup(backup, join(directory, "new.sqlite")),
-    ).resolves.toMatchObject({ version: 1, schemaVersion: 12 });
+    ).resolves.toMatchObject({ version: 1, schemaVersion: 13 });
     const invalid = join(directory, "other.sqlite"),
       other = new Database(invalid);
     other.exec("CREATE TABLE unrelated(x)");
@@ -208,5 +208,61 @@ it("upgrades early usage schemas without losing records, identity or deleted exp
     ).toEqual({ n: 2 });
   } finally {
     reopened.close();
+  }
+});
+
+it("restores learning answers and exact receipts together with installation identity", async () => {
+  const { default: request } = await import("supertest");
+  const { createApp } = await import("../apps/api/src/app");
+  const app = createApp(db),
+    base = "/api/v1/learning-path";
+  const instanceId = randomUUID();
+  await request(app)
+    .post(`${base}/instances`)
+    .send({
+      eventId: randomUUID(),
+      instanceId,
+      sessionId: randomUUID(),
+      contentId: "table-flow",
+      contentVersion: "1",
+    })
+    .expect(200);
+  const root = `${base}/instances/${instanceId}/questions/free-check`;
+  await request(app)
+    .post(`${root}/presented`)
+    .send({ eventId: randomUUID() })
+    .expect(200);
+  const command = {
+    requestId: randomUUID(),
+    contentVersion: "1",
+    answer: { kind: "choice", choiceId: "check" },
+  };
+  const first = await request(app)
+    .post(`${root}/answers`)
+    .send(command)
+    .expect(200);
+  const backup = join(directory, "learning.sqlite"),
+    restored = join(directory, "learning-restored.sqlite");
+  const manifest = await createDataBackup(db, backup);
+  expect(manifest.counts).toMatchObject({
+    learning_path_events: 4,
+    learning_path_answer_receipts: 1,
+  });
+  await restoreDataBackup(backup, restored);
+  const recovered = openDatabase(restored);
+  try {
+    const replay = await request(createApp(recovered))
+      .post(`${root}/answers`)
+      .send(command)
+      .expect(200);
+    expect(replay.text).toBe(first.text);
+    expect(
+      recovered.prepare("SELECT * FROM learning_path_events").all(),
+    ).toEqual(db.prepare("SELECT * FROM learning_path_events").all());
+    expect(
+      recovered.prepare("SELECT * FROM learning_path_answer_receipts").all(),
+    ).toEqual(db.prepare("SELECT * FROM learning_path_answer_receipts").all());
+  } finally {
+    recovered.close();
   }
 });

@@ -50,6 +50,8 @@ function inspect(path: string) {
       "bot_table_events",
       "usage_events",
       "usage_sessions",
+      "learning_path_events",
+      "learning_path_answer_receipts",
     ]) {
       if (
         snapshot

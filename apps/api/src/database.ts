@@ -54,6 +54,16 @@ export function openDatabase(
       );
     }
   }).immediate();
+  db.transaction(() => {
+    if (!db.prepare("SELECT 1 FROM schema_migrations WHERE version=13").get()) {
+      db.exec(
+        readFileSync(
+          resolve("apps/api/migrations/013_learning_path.sql"),
+          "utf8",
+        ),
+      );
+    }
+  }).immediate();
   initializeUsage(db);
   return db;
 }
