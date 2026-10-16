@@ -417,6 +417,19 @@ for (const failedStep of ["delete", "refresh"]) {
   });
 }
 
+test("fresh-transfer results start at zero separately from engagement", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("region", { name: "Fresh transfer results", exact: true }),
+  ).toContainText("0/0 correct on first presentations");
+  await expect(
+    page.getByText(/0 lessons completed.*0 answers attempted/),
+  ).toBeVisible();
+  await expect(page.getByText(/not a mastery or speed score/)).toBeVisible();
+});
+
 test("four units teach visible assumptions and preserve review, repeat and fresh-transfer histories", async ({
   page,
   request,
@@ -493,8 +506,27 @@ test("four units teach visible assumptions and preserve review, repeat and fresh
             /After these foundations, try Bot table or Cash Decision Lab/,
           ),
         ).toBeVisible();
-      if (question.isTransfer)
+      const transferNote = page.getByRole("note", {
+        name: "Transfer question",
+        exact: true,
+      });
+      if (question.isTransfer) {
         transfers.push({ id: question.id, fresh: state.isFreshTransfer });
+        await expect(transferNote).toContainText(
+          state.isFreshTransfer
+            ? "Fresh transfer: first presentation"
+            : "Reused transfer: previously seen",
+        );
+        if (!state.isFreshTransfer) {
+          await expect(transferNote).toContainText(
+            "Reused variants do not change your fresh-transfer result.",
+          );
+          await page.screenshot({
+            path: test.info().outputPath(`reused-${question.id}.png`),
+            fullPage: true,
+          });
+        }
+      } else await expect(transferNote).toHaveCount(0);
       if (repeat && question.id === "future-betting")
         answers[question.id] =
           "No, future betting and the opponent range matter";
@@ -581,6 +613,11 @@ test("four units teach visible assumptions and preserve review, repeat and fresh
   await expect(
     page.getByText(/8 lessons completed.*38 answers attempted/),
   ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Fresh transfer results", exact: true }),
+  ).toContainText(
+    `${progress.transferCorrect}/${progress.transferAttempts} correct on first presentations`,
+  );
   await expect(page.getByText(/not a mastery or speed score/)).toBeVisible();
   const exported = await (await request.get(`${base}/export`)).json();
   expect(

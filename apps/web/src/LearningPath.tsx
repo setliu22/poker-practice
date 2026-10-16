@@ -387,6 +387,15 @@ export function LearningPath() {
           mistakes to learn from
         </p>
       )}
+      {progress && (
+        <div role="region" aria-label="Fresh transfer results">
+          <p>
+            Fresh transfer results: {progress.transferCorrect}/
+            {progress.transferAttempts} correct on first presentations.
+          </p>
+          <p className="quiet">Reused variants count as practice only.</p>
+        </div>
+      )}
       <p className="quiet">
         Practice consistency and understanding are separate. These counts are
         practice history, not a mastery or speed score.
@@ -451,6 +460,13 @@ export function LearningPath() {
                 {question.title}
               </h2>
               <p>{question.prompt}</p>
+              {question.isTransfer && (
+                <p role="note" aria-label="Transfer question">
+                  {instance.isFreshTransfer
+                    ? "Fresh transfer: first presentation."
+                    : "Reused transfer: previously seen. Reused variants do not change your fresh-transfer result."}
+                </p>
+              )}
               <details>
                 <summary>Assumptions</summary>
                 <ul>
