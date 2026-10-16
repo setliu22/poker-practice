@@ -416,3 +416,221 @@ for (const failedStep of ["delete", "refresh"]) {
     await expect(page.getByText("0 answers attempted")).toBeVisible();
   });
 }
+
+test("four units teach visible assumptions and preserve review, repeat and fresh-transfer histories", async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(90000);
+  const base = "/api/v1/learning-path";
+  const course = await (await request.get(base)).json();
+  await page.goto("/");
+  for (const unit of course.units)
+    await expect(
+      page.getByRole("heading", { name: unit.title, exact: true }),
+    ).toBeVisible();
+  const answers: Record<string, string | number> = {
+    "free-check": "Check",
+    "facing-bet": "Call 10",
+    "minimum-raise": "30 total",
+    "next-street": "Deal the three-card flop",
+    "transfer-free": "Check",
+    "two-pair": "Two pair",
+    "flush-straight": "Flush",
+    "board-tie": "Tie: both play the board",
+    "transfer-full-house": "Full house",
+    "button-position": "Last",
+    "baseline-aces": "Raise according to the baseline",
+    "baseline-seven-two": "Fold according to the baseline",
+    "chart-limits": "It proves optimal poker play",
+    "transfer-kings": "Raise according to the baseline",
+    "call-price": 25,
+    "river-range": 50,
+    "conditional-call": "Call under the supplied assumptions",
+    "transfer-price": 33.333,
+    "flush-draw": "No, a four-heart flush draw",
+    "flush-outs": "9 hearts",
+    "next-card": 19.149,
+    "future-betting": "Yes, equity alone settles it",
+    "transfer-board-pair": "No, a full house or four of a kind can beat it",
+    "transfer-straight": 17.021,
+  };
+  const attempts: string[] = [];
+  const transfers: { id: string; fresh: boolean }[] = [];
+  let resumed = false;
+  async function finishCurrent(repeat = false) {
+    let state = await (
+      await request.get(
+        `${base}/instances/${(await (await request.get(`${base}/progress`)).json()).activeInstanceId}`,
+      )
+    ).json();
+    attempts.push(state.instanceId);
+    while (state.question) {
+      const question = state.question;
+      const heading = page.getByRole("heading", {
+        name: question.title,
+        exact: true,
+      });
+      await expect(heading).toBeVisible();
+      await expect(
+        page.getByRole("region", { name: "Path feedback" }),
+      ).toHaveCount(0);
+      expect(JSON.stringify(question)).not.toMatch(
+        /correctAnswer|gradingRule|explanation|takeaway/,
+      );
+      // Native details keeps its open state when React reuses the question view.
+      if (
+        !(await page
+          .getByText(question.assumptions[0], { exact: true })
+          .isVisible())
+      )
+        await page.getByText("Assumptions", { exact: true }).click();
+      for (const assumption of question.assumptions)
+        await expect(page.getByText(assumption, { exact: true })).toBeVisible();
+      if (state.contentId === "postflop-reasoning" && state.questionIndex === 0)
+        await expect(
+          page.getByText(
+            /After these foundations, try Bot table or Cash Decision Lab/,
+          ),
+        ).toBeVisible();
+      if (question.isTransfer)
+        transfers.push({ id: question.id, fresh: state.isFreshTransfer });
+      if (repeat && question.id === "future-betting")
+        answers[question.id] =
+          "No, future betting and the opponent range matter";
+      const value = answers[question.id];
+      expect(value, `authored answer for ${question.id}`).toBeDefined();
+      if (typeof value === "number") {
+        await page.getByRole("spinbutton").fill(String(value));
+        if (!resumed) {
+          await page.reload();
+          await expect(heading).toBeFocused();
+          await expect(page.getByRole("spinbutton")).toHaveValue(String(value));
+          resumed = true;
+        }
+      } else
+        await page.getByRole("radio", { name: value, exact: true }).check();
+      await page
+        .getByRole("button", { name: "Submit answer", exact: true })
+        .click();
+      await expect(
+        page.getByRole("region", { name: "Path feedback" }),
+      ).toBeVisible();
+      await page.getByRole("button", { name: "Continue lesson" }).click();
+      await expect(heading).toHaveCount(0);
+      state = await (
+        await request.get(`${base}/instances/${state.instanceId}`)
+      ).json();
+    }
+    await expect(
+      page.getByRole("heading", { name: "Lesson complete", exact: true }),
+    ).toBeVisible();
+    return state;
+  }
+  for (const lesson of course.units.flatMap(
+    (unit: { lessons: { contentId: string; title: string }[] }) => unit.lessons,
+  )) {
+    await page
+      .getByRole("button", { name: `Start ${lesson.title}`, exact: true })
+      .click();
+    await finishCurrent();
+    const progress = await (await request.get(`${base}/progress`)).json();
+    if (lesson.contentId === "position-opening")
+      expect(progress.reviewSuggestion).toMatchObject({
+        contentId: "position-opening",
+        skillId: "position-opening",
+      });
+    if (lesson.contentId !== "postflop-reasoning")
+      await page
+        .getByRole("button", { name: "Back to path", exact: true })
+        .click();
+  }
+  for (let repeat = 0; repeat < 3; repeat++) {
+    const progress = await (await request.get(`${base}/progress`)).json();
+    expect(progress.reviewSuggestion).toMatchObject({
+      contentId: "postflop-reasoning",
+      skillId: "postflop-reasoning",
+    });
+    await expect(
+      page.getByText(
+        "Review the skill from your most recent incorrect answer.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Review missed ideas", exact: true })
+      .click();
+    const state = await finishCurrent(true);
+    expect(state.selectionReason).toMatch(repeat === 0 ? /unseen/i : /reused/i);
+  }
+  expect(new Set(attempts).size).toBe(8);
+  expect(transfers.slice(-3)).toEqual([
+    { id: "transfer-straight", fresh: true },
+    { id: "transfer-board-pair", fresh: false },
+    { id: "transfer-straight", fresh: false },
+  ]);
+  const progress = await (await request.get(`${base}/progress`)).json();
+  expect(progress).toMatchObject({
+    startedLessons: 8,
+    completedLessons: 8,
+    answerAttempts: 38,
+    transferAttempts: 6,
+    transferCorrect: 6,
+    resumedLessons: 1,
+  });
+  await expect(
+    page.getByText(/8 lessons completed.*38 answers attempted/),
+  ).toBeVisible();
+  await expect(page.getByText(/not a mastery or speed score/)).toBeVisible();
+  const exported = await (await request.get(`${base}/export`)).json();
+  expect(
+    exported.events.filter(
+      (event: { kind: string }) => event.kind === "lesson-opened",
+    ),
+  ).toHaveLength(8);
+  expect(
+    exported.events.filter(
+      (event: { kind: string }) => event.kind === "answer-submitted",
+    ),
+  ).toHaveLength(38);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: test.info().outputPath("four-unit-review.png"),
+    fullPage: true,
+  });
+});
+
+test("experienced players can enter bot and cash practice before completing a lesson", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/");
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Bot table", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Bot table", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Learn", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Open online cash Decision Lab", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Online cash Decision Lab",
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(
+    (await (await request.get("/api/v1/learning-path/progress")).json())
+      .startedLessons,
+  ).toBe(0);
+});

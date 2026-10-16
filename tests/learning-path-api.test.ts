@@ -430,6 +430,7 @@ describe("local learning path ledger", () => {
       await request(app).get(`${base}/export?${query}`).expect(400);
   });
   it("protects event updates and clears the path separately or with all progress while preserving games and content", async () => {
+    const catalogBeforeClear = (await request(app).get(base).expect(200)).body;
     const { body } = await start();
     await finish(body.instanceId);
     db.prepare("INSERT INTO read_lessons VALUES('old',0,'now')").run();
@@ -456,8 +457,8 @@ describe("local learning path ledger", () => {
     expect(db.prepare("SELECT COUNT(*) n FROM read_lessons").get()).toEqual({
       n: 0,
     });
-    expect((await request(app).get(base)).body.units[0].lessons).toHaveLength(
-      1,
+    expect((await request(app).get(base).expect(200)).body).toEqual(
+      catalogBeforeClear,
     );
   });
   it("migrates v12 additively without changing identity, lessons, games, usage or export sequence", () => {

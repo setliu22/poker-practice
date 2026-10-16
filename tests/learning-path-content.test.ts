@@ -23,6 +23,137 @@ const version = "1";
 const uuid = "00000000-0000-4000-8000-000000000001";
 
 describe("versioned learning path contract and content", () => {
+  it("offers four beginner-first units with complete, private question pools and reviewable skills", () => {
+    const catalog = getLearningPathCatalog();
+    expect(catalog.units.map((unit) => unit.id)).toEqual([
+      "table-basics",
+      "position-openings",
+      "price-and-equity",
+      "postflop-basics",
+    ]);
+    const skills = new Set<string>();
+    for (const summary of catalog.units.flatMap((unit) => unit.lessons)) {
+      const lesson = getLessonDefinition(summary.contentId, version)!;
+      expect(lesson).toBeDefined();
+      // The review projection maps question skills to the first catalog lesson.
+      expect(skills.has(summary.skillId)).toBe(false);
+      skills.add(summary.skillId);
+      expect(lesson.coreQuestions.length).toBeGreaterThanOrEqual(3);
+      expect(lesson.coreQuestions.length).toBeLessThanOrEqual(5);
+      expect(lesson.transferQuestions.length).toBeGreaterThanOrEqual(2);
+      const all = [...lesson.coreQuestions, ...lesson.transferQuestions];
+      expect(new Set(all.map((item) => item.question.id)).size).toBe(
+        all.length,
+      );
+      for (const item of all) {
+        const question = getPublicQuestion(
+          summary.contentId,
+          version,
+          item.question.id,
+        )!;
+        expect(question.skillId).toBe(summary.skillId);
+        expect(question.assumptions.length).toBeGreaterThan(0);
+        expect(JSON.stringify(question)).not.toMatch(
+          /correctAnswer|gradingRule|explanation|takeaway/,
+        );
+        expect(learningPathQuestionSchema.parse(question)).toEqual(question);
+        expect(question.isTransfer).toBe(
+          lesson.transferQuestions.includes(item),
+        );
+      }
+    }
+  });
+
+  it("grades independently checked hand, position, price, range and postflop examples", () => {
+    // Literal answers are hand-derived: AA+77 is two pair; a flush beats a
+    // straight; the board royal flush plays for everyone. Price is 25/(50+25+25).
+    // The river range has one winning and one losing combo, equally weighted.
+    const choices = [
+      ["hand-rankings", "two-pair", "two-pair"],
+      ["hand-rankings", "flush-straight", "flush"],
+      ["hand-rankings", "board-tie", "tie"],
+      ["hand-rankings", "transfer-full-house", "full-house"],
+      ["hand-rankings", "transfer-kicker", "ace-kicker"],
+      ["position-opening", "button-position", "last"],
+      ["position-opening", "baseline-aces", "raise"],
+      ["position-opening", "baseline-seven-two", "fold"],
+      ["position-opening", "chart-limits", "baseline"],
+      ["position-opening", "transfer-kings", "raise"],
+      ["position-opening", "transfer-facing-raise", "outside"],
+      ["pot-odds-equity", "conditional-call", "call"],
+      ["postflop-reasoning", "flush-draw", "draw"],
+      ["postflop-reasoning", "flush-outs", "nine"],
+      ["postflop-reasoning", "future-betting", "not-enough"],
+      ["postflop-reasoning", "transfer-board-pair", "not-guaranteed"],
+    ];
+    for (const [lesson, question, choiceId] of choices) {
+      expect(
+        gradeLearningPathAnswer(lesson!, version, question!, {
+          kind: "choice",
+          choiceId: choiceId!,
+        }).correct,
+      ).toBe(true);
+      expect(
+        gradeLearningPathAnswer(lesson!, version, question!, {
+          kind: "choice",
+          choiceId: "wrong",
+        }).correct,
+      ).toBe(false);
+    }
+    const percents = [
+      ["pot-odds-equity", "call-price", 25],
+      ["pot-odds-equity", "river-range", 50],
+      ["pot-odds-equity", "transfer-price", 100 / 3],
+      ["pot-odds-equity", "transfer-tie", 50],
+      ["postflop-reasoning", "next-card", 900 / 47],
+      ["postflop-reasoning", "transfer-straight", 800 / 47],
+    ] as const;
+    for (const [lesson, question, value] of percents) {
+      expect(
+        gradeLearningPathAnswer(lesson, version, question, {
+          kind: "percent",
+          value,
+        }).correct,
+      ).toBe(true);
+      expect(
+        gradeLearningPathAnswer(lesson, version, question, {
+          kind: "percent",
+          value: value + 1,
+        }).correct,
+      ).toBe(false);
+      expect(
+        gradeLearningPathAnswer(lesson, version, question, {
+          kind: "choice",
+          choiceId: "call",
+        }).correct,
+      ).toBe(false);
+    }
+  });
+
+  it("uses unseen transfers before cycling exhausted pools in authored order", () => {
+    for (const summary of getLearningPathCatalog().units.flatMap(
+      (unit) => unit.lessons,
+    )) {
+      const pool = getLessonDefinition(
+        summary.contentId,
+        version,
+      )!.transferQuestions.map((item) => item.question.id);
+      const seen: string[] = [];
+      for (let cycle = 0; cycle < 3; cycle++) {
+        for (const id of pool) {
+          const selected = selectLearningPathTransfer(
+            summary.contentId,
+            version,
+            seen,
+          );
+          expect(selected.questionId).toBe(id);
+          expect(selected.reason).toMatch(cycle === 0 ? /unseen/i : /reused/i);
+          seen.push(id);
+        }
+      }
+    }
+  });
+
   it("strictly validates discriminated answers and finite percentages", () => {
     for (const answer of [
       { kind: "choice", choiceId: "check" },
