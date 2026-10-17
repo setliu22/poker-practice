@@ -81,6 +81,16 @@ A controlled synthetic premium-overfold test showed that raw probabilities track
 
 **Local practice data** records decision views, displayed fast/hint/odds/guide feedback and accepted choices with pseudonymous session IDs, timestamps and journal links. Actions and their usage records commit together; missing assistance telemetry stays unknown. Nothing uploads automatically. Download a paged usage JSON export or a full SQLite backup, or clear usage while keeping games. Backups use committed WAL state and validated restore to a new path. [System design, measured performance and recovery](docs/usage-data-design.md).
 
+**Poker foundations path** offers five short lessons in four beginner-first units: table flow, hand rankings, position/opening baselines, pot odds against a visible range, and introductory postflop reasoning. Answers stay hidden until submission. A versioned local event ledger records lesson starts, question presentations, answers, feedback display and completion; retries return the original saved answer result. Progress separates practice engagement from fresh-transfer results, and reused transfer questions are labeled and excluded from the fresh count. The authored chart and range exercises are conditional teaching examples, not proof of optimal play or general poker skill. No course data uploads or trains a model automatically. See the [learning-path data contract](docs/learning-path.md).
+
+Focused checks for course content/API, production build, and desktop browser behavior:
+
+```sh
+npx vitest run tests/learning-path-content.test.ts tests/learning-path-api.test.ts
+npm run build
+npm run test:browser -- tests/browser/learning-path.spec.ts
+```
+
 Each hand starts with 1,000 chips per seat, blinds 5/10, no ante and no rake. This is per-hand practice, not a continuous bankroll or elimination tournament. Play preflop through river using fold, check, call, and bet/raise. Raise amounts are **total chips committed this street**, not additional chips. The minimum and maximum are shown; “Set all-in” fills the amount before submission. Legal all-in calls, short raises, cumulative raise reopening, uncalled-chip returns, main/side pots, and split pots are handled server-side. Odd chips go clockwise from the dealer. Minimum raises/reopening are modeled on the [Poker TDA rules](https://www.pokertda.com/view-poker-tda-rules/); physical-table procedures are outside this app’s scope.
 
 Bots use original contextual policies and seeded mixed actions. They consider position, effective remaining stack/pot ratio, call price, preflop raises/limpers, current made-hand strength, flush/straight/backdoor draws, board texture, blockers, earlier aggression, checked-through streets, and multiway pressure. They mix legal small/medium/large sizes, with selected overbets and shallow-stack shoves. These are deliberately different opponents with exploitable tendencies, not a solver or competitive poker AI.
@@ -166,10 +176,14 @@ apps/api/migrations/004_game_numbers.sql Stable game numbers (version 4)
 apps/api/migrations/010_table_events.sql Append-only events, request identities and labels
 apps/api/migrations/011_usage.sql Local usage identity, sessions and immutable facts
 apps/api/migrations/012_usage_compatibility.sql Data/cursor-preserving early-schema upgrade
+apps/api/migrations/013_learning_path.sql Immutable learning events and answer receipts
 apps/api/src/table-journal.ts Event persistence and projection recovery
 apps/api/src/table-routes.ts Versioned/legacy table command and history routes
 apps/api/src/usage.ts Signed display acknowledgements and usage export
 apps/api/src/data-backup.ts WAL-consistent snapshot and validated new-path restore
+apps/api/src/learning-path.ts Reconstructed course progress, idempotent answers and event export
+apps/api/src/learning-path-content.ts Versioned server-side course and grading keys
+packages/shared/src/learning-path.ts Strict public course, event and progress contracts
 packages/poker/src/ Pure evaluator, deck, seeded deals, pot odds, range/equity logic
   showdown.ts        Shared showdown sampler/enumeration and uncertainty intervals
   live-odds.ts       Public-information live snapshots and range-based odds

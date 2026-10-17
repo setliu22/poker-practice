@@ -1,5 +1,7 @@
 # Poker Learning Path Implementation Plan
 
+**Status:** Complete. Tasks 1–4c and Task 5 are implemented, verified and independently reviewed. The user removed the separate mobile browser project; the single responsive web app remains.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship a complete, beginner-first poker course with replayable local learning history, reliable resume and retries, and transparent progress while keeping existing practice modes available.
@@ -20,7 +22,7 @@
 - New path events are immutable and versioned. Exact answer retries return their saved receipt; request-ID collisions with different payloads and stale content versions conflict. Commit the answer event and exact response receipt in one SQLite transaction; send success only after commit. Explicit learner-requested clearing may delete this ledger.
 - Derive progress and missed-skill review from the event history. Keep legacy lesson and answer rows readable and labeled as legacy; never fabricate historical presentation or feedback events.
 - Add only versioned SQLite migrations. Preserve table journal/usage contracts, seeded replay, saved-game reconstruction, PreflopR provenance and the optional external-solver boundary.
-- Keep the interface keyboard-operable and responsive. Verify focus, loading, retry, resume, feedback visibility, and narrow-screen behavior.
+- Keep the interface keyboard-operable for the desktop web app. Verify focus, loading, retry, resume, and feedback visibility. Do not maintain a separate mobile browser project or mobile-specific feature scope.
 
 ## Review Focus
 
@@ -28,7 +30,7 @@
 2. **Premature or unsupported disclosure:** unanswered questions contain no answer key or feedback; display acknowledgements are recorded only after the client renders them; feedback acknowledgements do not imply comprehension. Cover in Tasks 2 and 3 API/browser tests.
 3. **Partial writes and recovery:** forced failure between answer-event and receipt writes leaves neither accepted; restart and event-based reconstruction preserve the attempt; migration and backup/restore preserve old and new records. Cover in Task 2 tests.
 4. **Export stability and deletion:** pagination pins a high-water cursor despite later appends; clear-progress removes the new learning history and receipts while retaining static course content and saved games. Cover in Task 2 tests.
-5. **Course correctness and access:** every lesson has 3–5 core exercises plus a separate fresh-transfer check, clear assumptions, honest authored feedback, hidden answers until submission, keyboard operation, and no mobile horizontal overflow. Cover in Tasks 1, 3, and 4 tests.
+5. **Course correctness and access:** every lesson has 3–5 core exercises plus a separate fresh-transfer check, clear assumptions, honest authored feedback, hidden answers until submission, and keyboard operation. Cover in Tasks 1, 3, and 4 tests.
 
 ## Tasks
 
@@ -55,12 +57,12 @@
 - Export strict Zod schemas for all command and wire types. `getLearningPathCatalog(): LearningPathCatalog`, `getLessonDefinition(contentId: string, contentVersion: string): LessonDefinition | undefined`, `getPublicQuestion(contentId: string, contentVersion: string, questionId: string): LearningPathQuestion | undefined`, `selectLearningPathTransfer(contentId: string, contentVersion: string, seenQuestionIds: readonly string[]): { questionId: string; reason: string }`, and `gradeLearningPathAnswer(contentId: string, contentVersion: string, questionId: string, answer: LearningPathAnswer): LearningPathFeedback` come from the API content module. `LessonDefinition` stays server-private and contains metadata, 3–5 core questions, at least two transfer variants, answer keys, grading rules, explanations and takeaways.
 - Public questions include prompt, choice labels when applicable, skill ID, assumptions, and transfer flag. They never include correct answer, grading rule, or feedback. Each lesson presents 3–5 core questions plus one transfer question selected from its versioned transfer pool. `LearningPathFeedback` may identify the correct response only after submission.
 
-- [ ] **Write contract and content tests first.** Add `it` cases for strict answer parsing, stable path/content versions, 3–5 core questions plus a separate transfer item selected from a pool of at least two, grading under the pinned version, and no answer or grading fields in serialized public data.
-- [ ] **Run `npx vitest run tests/learning-path-content.test.ts`.** Confirm it fails because the new contract and content module do not exist.
-- [ ] **Add the shared contracts** with explicit versions, strict unknown-key rejection, and the interface shapes above.
-- [ ] **Author the first server-side lesson** on table flow and legal actions, with 3–5 core decisions and at least two transfer variants, clear assumptions, and beginner-friendly explanations. Keep answer keys and grading rules private to the API module.
-- [ ] **Run `npx vitest run tests/learning-path-content.test.ts`.** Confirm contract, core-question count, transfer selection, grading, and serialization checks pass.
-- [ ] **Commit only these files** after the user has approved an implementation method and all checks pass: `git add packages/shared/src/learning-path.ts apps/api/src/learning-path-content.ts tests/learning-path-content.test.ts && git commit -m "feat: define versioned poker learning content"`.
+- [x] **Write contract and content tests first.** Added strict answer parsing, stable versions, question/transfer pool shape, pinned grading and public-data privacy assertions.
+- [x] **Run `npx vitest run tests/learning-path-content.test.ts`.** RED confirmed the missing contract/content modules; later regression RED exposed an ambiguous preflop-round example.
+- [x] **Add the shared contracts** with explicit versions, strict unknown-key rejection, and the interface shapes above.
+- [x] **Author the first server-side lesson** on table flow and legal actions, with 3–5 core decisions, two transfer variants, clear assumptions and server-private answer keys.
+- [x] **Run `npx vitest run tests/learning-path-content.test.ts`.** Focused suite passed 8/8 after the regression fix; lead and independent reruns passed.
+- [x] **Commit only these files** after review: `ac2db44` added the contract/content/tests and `97807c1` corrected the round-completion example.
 
 ### Task 2: Add the durable event ledger and local learning API
 
@@ -81,17 +83,17 @@
 - `DELETE /progress` clears only path events and receipts. The existing `DELETE /api/progress` also clears this ledger as part of its all-progress transaction.
 - `GET /export?afterCursor=<n>&throughCursor=<n>&limit=<n>` returns `{ version: 1, installationId: string, throughCursor: number, events: LearningPathEvent[], nextCursor: number, done: boolean }`. The first page chooses and returns `throughCursor`; later pages must pass it back.
 
-- [ ] **Write API and recovery tests first.** Add `it` cases for v12 migration preservation, acknowledgement ordering, exact retry versus changed-payload conflict, conflicting answer IDs for an answered question, event-ID collision, idempotent resume, unseen transfer selection, stale content rejection, restart reconstruction, receipt-write rollback, high-water export stability, path-only versus all-progress clear, and backup/restore.
-- [ ] **Run `npx vitest run tests/learning-path-api.test.ts tests/data-backup.test.ts`.** Confirm new-route/migration cases fail before implementation; preserve current unrelated test state.
-- [ ] **Add migration 013** with `learning_path_events` (autoincrement cursor, stable event ID, schema version, installation/session/instance/content identifiers, event type, timestamp, validated JSON payload) and `learning_path_answer_receipts` (request ID, instance/question IDs, canonical payload hash, event cursor, exact response JSON, and a unique instance/question constraint). Add an update-protection trigger; permit deletion only through explicit clear-progress handlers.
-- [ ] **Apply version 13 additively in `openDatabase()`** and test that existing lesson, usage, game, installation and cursor records remain intact.
-- [ ] **Implement the route handlers and event reconstruction.** Persist lesson-opened (including saved question order and selection reason), lesson-resumed, question-presented, answer-submitted, feedback-generated, feedback-shown and lesson-completed as distinct facts. Deduplicate exact event acknowledgements by event ID and conflict on changed-payload reuse. Require a question-presented event before grading and a feedback-shown event before advancing. Select an unseen transfer variant deterministically from prior presentation events, mark freshness in its presentation event, and reconstruct the same order after restart. Return the most recently opened incomplete `activeInstanceId` from progress so the UI can recover even if its local checkpoint is missing. Count only first-seen transfer answers in transfer performance.
-- [ ] **Make answer acceptance atomic.** Validate instance, current question, content version and strict answer. Hash the canonical `{ instanceId, questionId, contentVersion, answer }` payload for request-ID comparison. In one immediate transaction append separate answer-submitted and feedback-generated events plus the exact response receipt. Return saved feedback for the same request ID and payload; return 409 for changed-payload reuse, a second request ID for an answered question, or stale versions. A forced receipt-write failure must roll back both events and return no success.
-- [ ] **Implement stable export pagination.** Choose a high-water cursor on the first request, use cursor order, validate page size and cursor bounds, and keep later appends out of the in-progress export.
-- [ ] **Connect explicit recovery.** Add both learning tables to the SQLite backup manifest counts. Implement path-only clear and extend the existing confirmed `DELETE /api/progress` transaction to clear learning events and receipts while retaining the source-defined course and saved games.
-- [ ] **Run `npx vitest run tests/learning-path-api.test.ts tests/data-backup.test.ts`.** Verify exact replay, collision/stale conflicts, atomic rollback, restart reconstruction, migration preservation, pinned pagination, clear behavior and restored event/receipt counts.
-- [ ] **Run `npm run build`** to verify shared types, route wiring and API compilation.
-- [ ] **Commit only this task's files** after all checks pass: `git add apps/api/migrations/013_learning_path.sql apps/api/src/database.ts apps/api/src/app.ts apps/api/src/data-backup.ts apps/api/src/learning-path.ts tests/learning-path-api.test.ts tests/data-backup.test.ts && git commit -m "feat: persist replayable learning path events"`.
+- [x] **Write API and recovery tests first.** Covered migration preservation, acknowledgement order, idempotent retry/conflicts, event IDs, resume, transfer selection, stale content, reconstruction, atomic rollback, export stability, clear and backup/restore.
+- [x] **Run `npx vitest run tests/learning-path-api.test.ts tests/data-backup.test.ts`.** RED produced expected missing route/migration failures; focused suite later passed, with fixture corrections recorded in the task report.
+- [x] **Add migration 013** with immutable event and exact answer-receipt tables plus update protection.
+- [x] **Apply version 13 additively in `openDatabase()`** and verify old lesson, usage, game, installation and cursor data remain intact.
+- [x] **Implement the route handlers and event reconstruction.** All planned event facts, retry-safe acknowledgements, ordered question selection and active-instance recovery are covered by API/browser tests.
+- [x] **Make answer acceptance atomic.** Answer/feedback events and exact receipt commit together; conflict and forced rollback cases are tested.
+- [x] **Implement stable export pagination.** Exports pin a high-water cursor; later events stay outside an in-progress export.
+- [x] **Connect explicit recovery.** Backup manifests include both learning tables; path-only and app-wide clear preserve the intended unrelated data.
+- [x] **Run `npx vitest run tests/learning-path-api.test.ts tests/data-backup.test.ts`.** The reviewed focused suite passed; later full serial verification passed 403 tests with 2 optional skips.
+- [x] **Run `npm run build`** to verify shared types, route wiring and API compilation; build passed.
+- [x] **Commit only this task's files** after review: `8306b88` added the API/ledger and `4ae0bfd` corrected latest-missed-skill ordering.
 
 ### Task 3: Build the first lesson as a complete accessible UI slice
 
@@ -111,15 +113,15 @@
 - `POST /instances/:instanceId/resumed` records a client-acknowledged return to an existing incomplete instance. Progress counts that event to measure resumes without treating an open lesson as completed.
 - Persist a stable `sessionId`, active `instanceId`, and pending `{ requestId, questionId, contentVersion, answer }` in local storage until the server confirms the answer. Reuse that exact pending object on retry; if the checkpoint is missing, recover `activeInstanceId` from `GET /progress` and reload it from the API.
 
-- [ ] **Write the failing browser flow first.** Cover course landing, hidden feedback before submission, shown feedback after submission, missed-question review, reload/resume, path-only clear confirmation, keyboard-only operation, and a 320px viewport.
-- [ ] **Run `npm run test:browser -- tests/browser/learning-path.spec.ts`.** Confirm the new course flow is absent.
-- [ ] **Add the path to `Learn.tsx`.** Show beginner progress and the next lesson first while keeping existing authored lessons, walkthroughs and decision practice directly reachable.
-- [ ] **Implement the first lesson loop.** Resume API state and append a `lesson-resumed` event when returning to a saved incomplete instance; acknowledge each question after it renders; submit with a stable request ID; retain the answer across transient errors/reload; show feedback only after the answer response; acknowledge feedback after rendering; and record lesson completion once. Do not show a speed score.
-- [ ] **Add loading, stale-version, error and retry states** with heading focus after view changes and keyboard-accessible controls. On a stale-version response preserve the entered answer and offer a deliberate reload; on clear-progress dialog close or Escape, return focus to its trigger.
-- [ ] **Implement explicit data controls.** Follow all cursor-pinned pages for the learner-initiated JSON download. Add a confirmation dialog for clearing only this path's progress; persist event IDs before sending acknowledgements and reuse those IDs on retry.
-- [ ] **Run `npm run test:browser -- tests/browser/learning-path.spec.ts`.** Abort the browser response after `route.fetch()` commits an answer, then verify the same request ID recovers its feedback. Also verify unanswered response/DOM disclosure, event acknowledgement order, legacy-summary labeling, path-only clear confirmation, keyboard operation, resume and no horizontal overflow in desktop and mobile projects.
-- [ ] **Run `npm run build`** and `npx vitest run tests/learning-path-api.test.ts` after the integrated UI is in place.
-- [ ] **Commit only this task's files** after all checks pass: `git add apps/web/src/LearningPath.tsx apps/web/src/Learn.tsx apps/web/src/styles.css tests/browser/learning-path.spec.ts && git commit -m "feat: add accessible poker learning path"`.
+- [x] **Write the failing browser flow first.** RED confirmed the course heading was absent on desktop and mobile; the flow covers privacy, feedback, missed-question review, resume, clear confirmation, keyboard use and narrow viewports.
+- [x] **Run `npm run test:browser -- tests/browser/learning-path.spec.ts`.** The initial absence check failed as expected; the completed desktop/mobile suite passed.
+- [x] **Add the path to `Learn.tsx`.** Beginner progress and next lesson appear first while legacy lessons and advanced practice remain reachable.
+- [x] **Implement the first lesson loop.** The client resumes API state, acknowledges displayed content, retries the exact answer command, gates feedback and completes lessons once without speed scoring.
+- [x] **Add loading, stale-version, error and retry states** with focus management and keyboard-accessible controls; the fix round preserves retry operations and focus.
+- [x] **Implement explicit data controls.** Learner-requested export follows pinned pages; path clear is confirmed; stable event IDs survive retries.
+- [x] **Run `npm run test:browser -- tests/browser/learning-path.spec.ts`.** Desktop/mobile browser verification passed, including aborted-response receipt recovery, answer privacy, acknowledgement order, legacy labeling, keyboard, resume and narrow-screen behavior.
+- [x] **Run `npm run build`** and the focused learning API suite after integration; both passed.
+- [x] **Commit only this task's files** after review: `ff8f881` added the accessible path and `de90358` fixed retry/focus recovery.
 
 ### Task 4: Complete the beginner curriculum and deterministic review
 
@@ -127,7 +129,7 @@
 
 **Files:**
 
-- Modify `apps/api/src/learning-path-content.ts`, `tests/learning-path-content.test.ts`, and `tests/browser/learning-path.spec.ts`.
+- Modify `apps/api/src/learning-path-content.ts`, `tests/learning-path-content.test.ts`, `tests/learning-path-api.test.ts`, and `tests/browser/learning-path.spec.ts`.
 
 **Interfaces:**
 
@@ -135,30 +137,67 @@
 - `LearningPathProgress.reviewSuggestion` is `{ contentId: string; skillId: string; reason: string } | null`; derive it from committed answer-submitted/feedback-generated pairs by selecting the most recent incorrect skill and its lesson, with event cursor and catalog order as deterministic tie-breakers. Return `null` when no incorrect answer exists.
 - Repeated lessons use `POST /instances` to create a new instance; never edit or replace an earlier answer event.
 
-- [ ] **Extend failing content tests first.** Add an `it` case that iterates the catalog and requires every lesson to have 3–5 core exercises, at least two transfer variants, a skill and assumptions, plus no public answer fields. Add independently checked expected values for hand ranking/legal-action, position/opening, pot odds/equity against a supplied range, and introductory postflop examples.
-- [ ] **Run `npx vitest run tests/learning-path-content.test.ts`.** Confirm the unfinished units and review-selection cases fail.
-- [ ] **Add hand rankings and the remaining course units:** position/opening choices, pot odds and equity against a visible supplied range, and introductory postflop reasoning. Reuse the existing poker hand evaluator, `openingCharts`, and `read-lesson.ts` arithmetic where applicable; treat charts as authored baselines and range-dependent evaluations as conditional on stated assumptions. Do not copy external chart data.
-- [ ] **Add deterministic missed-skill review** using the most recent incorrect skill, with catalog-order tie-breaking and a plain-language reason. Choose an unseen transfer variant when available; after the pool is exhausted, cycle in authored order and mark it as reused. Create a new lesson instance for repeats and keep engagement counts separate from fresh-transfer results. Set no mastery threshold.
-- [ ] **Extend the browser flow through all four units.** Verify the recommended next step into existing bot/cash practice, transfer questions, interruption/resume, repeat as a new attempt, missed-skill selection, visible assumptions, progress labels, and direct access to advanced practice.
-- [ ] **Run `npx vitest run tests/learning-path-content.test.ts tests/learning-path-api.test.ts`** and `npm run test:browser -- tests/browser/learning-path.spec.ts`.
-- [ ] **Commit only this task's files** after all checks pass: `git add apps/api/src/learning-path-content.ts tests/learning-path-content.test.ts tests/browser/learning-path.spec.ts && git commit -m "feat: complete beginner poker curriculum"`.
+- [x] **Extend failing content tests first.** Added catalog-wide contract, independent examples, privacy and transfer-cycle tests.
+- [x] **Run `npx vitest run tests/learning-path-content.test.ts`.** RED showed the unfinished units, new examples and transfer cycling were missing.
+- [x] **Add hand rankings and the remaining course units:** position/opening choices, pot odds and equity against a visible supplied range, and introductory postflop reasoning. Reused the existing poker hand evaluator, `openingCharts`, and `potOdds` arithmetic; assumptions distinguish authored baselines and conditional calculations.
+- [x] **Add deterministic missed-skill review** using the most recent incorrect skill, with catalog-order tie-breaking and a plain-language reason. Transfer selection uses unseen variants before least-presented cycling with authored-order tie breaks. Repeat lessons create new instances; fresh-transfer and engagement counters remain distinct; no mastery threshold is set.
+- [x] **Extend the browser flow through all four units.** The desktop/mobile run verified assumptions, resume, new repeat instances, missed-skill selection, transfer freshness/reuse, progress counters and direct access to advanced practice.
+- [x] **Run the focused content/API and browser suites.** Lead rerun: 21 API/content tests passed; independent browser tester: 20/20 desktop/mobile cases passed. Builder also reports 403 passed / 2 optional skips and a successful build.
+- [x] **Commit only this task's files.** Lead reviewed/staged exactly the four assigned source/test paths; commit `816dc90` (`feat: complete beginner poker curriculum`).
+
+### Task 4b: Surface fresh-transfer evidence in the course UI
+
+**Status:** Approved; see commit `26526a5` and verification evidence in `PROGRESS.md`.
+
+**Suggested owner:** Course UI implementer after Task 4 returns file ownership.
+
+**Files:**
+
+- Modify `apps/web/src/LearningPath.tsx` and `tests/browser/learning-path.spec.ts`.
+
+**Interfaces:** No API, persistence or shared-contract changes. `LearningPathProgress.transferCorrect/transferAttempts` count only fresh transfer outcomes; `LearningPathInstanceState.isFreshTransfer` marks a first-seen variant at presentation.
+
+- [x] **Add failing desktop/mobile assertions first.** Browser RED was 4 expected failures / 18 passes; assertions cover separate zero-state counts, fresh/reused labels and API-matching final fresh results.
+- [x] **Implement accessible labels** using the existing progress DTO, region/note semantics, and existing styles; no focus or layout behavior was changed.
+- [x] **Run the browser suite and build.** Independent rerun: 22/22 (11 desktop, 11 mobile); builder reports build pass. Full Vitest serial rerun passed 403 / 2 optional skips.
+- [x] **Commit only the UI ticket's files.** Lead staged exactly the component and browser spec; commit `26526a5` (`feat: show fresh transfer progress`).
+
+### Task 4c: Recommend and mark the next unfinished lesson
+
+**Status:** Approved after scoped independent re-review and lead commit.
+
+**Owner:** One scoped fix implementer, followed by an independent re-review.
+
+**Files:**
+
+- Modify `packages/shared/src/learning-path.ts`, `apps/api/src/learning-path.ts`, `apps/web/src/LearningPath.tsx`, `apps/api/src/table-routes.ts`, `tests/learning-path-api.test.ts`, `tests/learning-path-content.test.ts`, `tests/browser/learning-path.spec.ts`, and `docs/learning-path.md`.
+
+**Acceptance:** Reconstruct distinct completed content IDs from committed completion events; expose the first unfinished catalog lesson as a deterministic recommendation; show completion markers and an explicit recommended next lesson in the path UI, while keeping every lesson and missed-skill review accessible. Add API and desktop browser regression coverage for completing one lesson, returning/reloading, and seeing the following lesson recommended. Strict schema fixtures and malformed-field assertions cover the additive progress DTO. Correct the two review wording mismatches: restore-manifest validation is conditional on a supplied manifest, and table-decision dataset copy accurately describes the shipped narrow assessment model without implying a general validated detector.
+
+- [x] Write failing progress/browser regression tests first; RED: focused API/content 1 failed / 21 passed and the new browser regression failed for the missing recommendation.
+- [x] Implement the additive progress DTO projection and accessible course recommendation/completion states; correct the two factual wording mismatches.
+- [x] Run focused API/content tests (22 passed), learning-path browser suite (24 passed across desktop and mobile before the user removed the mobile project), `npm run build`, and serial full suite (404 passed / 2 optional skips).
+- [x] Run scoped independent re-review for the recorded whole-branch findings and inspect the amended diff; all three findings were addressed, and no new Critical or Important defects were found.
+- [x] Commit only this ticket's exact files after checks/re-review pass.
 
 ### Task 5: Document the data contract and verify the full release boundary
+
+**Status:** Complete; documentation and release checks are committed after Task 4c review.
 
 **Suggested owner:** Lead integrator. The lead retains exclusive ownership of `PLAN.md` and `PROGRESS.md`.
 
 **Files:**
 
 - Create `docs/learning-path.md`.
-- Modify `README.md`, `VERIFY.md`, `PLAN.md`, and `PROGRESS.md`.
+- Modify `README.md`, `VERIFY.md`, `PLAN.md`, `PROGRESS.md`, the approved design scope note, this active implementation plan, `playwright.config.ts`, and the CI browser-step label. The user removed the separate mobile browser project; this changes test execution only, not the single responsive web app.
 
-**Interfaces:** This is a handoff/verification task. It does not change application interfaces or source behavior.
+**Interfaces:** This is a handoff/verification task. It does not change application interfaces or source behavior; the Playwright/CI configuration runs desktop only after the user's scope update.
 
-- [ ] **Document the behavior and limits.** Explain lesson/content versions, event kinds, client-display acknowledgements, idempotent answer receipts, resume/rebuild, cursor-pinned export, SQLite backup, clear behavior, legacy rows, local-only handling, and the distinction between practice engagement and learning evidence. State that spaced scheduling and model evaluation are later phases and the experience is not a validated measure of general poker skill.
-- [ ] **Update setup and verification docs.** Add the path and exact focused commands to `README.md` and `VERIFY.md`; confirm each referenced file and command exists.
-- [ ] **Run the full required checks:** `npm test`, `npm run build`, and `npm run test:browser -- tests/browser/learning-path.spec.ts`. Report optional solver tests as not run; this feature must work without GTOpen.
-- [ ] **Review the final diff and dirty tree.** Run `git diff --check`, `npx prettier --check` on the touched TypeScript/Markdown files, inspect `git status --short`, and confirm no database, export, build, model or test artifacts were added.
-- [ ] **Update `PROGRESS.md` with actual outputs only** and set `PLAN.md` to complete only after all acceptance criteria pass. Do not claim user-level learning gains from content or synthetic data.
-- [ ] **Commit only the lead-owned documentation files** after checks pass and within the user's authorized scope: `git add docs/learning-path.md README.md VERIFY.md PLAN.md PROGRESS.md && git commit -m "docs: describe poker learning path and verification"`.
+- [x] **Document the behavior and limits.** `docs/learning-path.md` explains versioning, events, display acknowledgements, receipts, resume/rebuild, exports, backup/restore, clears, legacy rows, local handling and measurement limits.
+- [x] **Update setup and verification docs.** README and VERIFY list the path and exact focused commands; local links and referenced test/script files were checked. The Playwright project and CI label now run desktop only as requested.
+- [x] **Run the full required checks after the final configuration change:** serial Vitest passed 404 tests / 2 optional skips and build passed after Task 4c; desktop-only full browser suite passed 92/92 after removing the mobile project. Optional GTOpen tests were not run.
+- [x] **Review the final diff and dirty tree after Task 4c.** Prettier, staged/unstaged `git diff --check` and exact-path staging passed.
+- [x] **Update `PROGRESS.md` with actual outputs only** and mark the plan complete; no user-learning claim is made.
+- [x] **Commit only the lead-owned documentation and verification files** after final review: stage the eight remaining files listed above and commit as `docs: describe poker learning path and verification`.
 
 ---

@@ -28,7 +28,7 @@ jobs:
         run: npm run build
       - name: Install browser and system dependencies
         run: npx playwright install --with-deps chromium
-      - name: Desktop and mobile browser tests
+      - name: Desktop browser tests
         run: npm run test:browser
       - name: Retain failure evidence
         if: failure()

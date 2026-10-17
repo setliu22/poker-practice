@@ -1,6 +1,10 @@
 # Poker learning path design
 
-**Status:** Approved by the user on 2026-10-16. This document defines the scope for the implementation plan; implementation awaits the user's review of that plan and choice of execution method.
+**Status:** Approved by the user on 2026-10-16. The user also approved the implementation plan and selected subagent-driven execution.
+
+## Scope update
+
+On 2026-10-16, the user removed mobile as a product and browser-testing target to avoid spending compute on a separate mobile experience. Poker Practice remains one web app; Playwright and CI now run only the desktop project. This update supersedes mobile-specific acceptance checks in the original draft. Earlier desktop/mobile test results remain historical evidence for the snapshot on which they ran.
 
 ## Goal
 

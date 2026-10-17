@@ -1,6 +1,6 @@
 # Active plan
 
-Status: Implementation in progress. The user approved the spec and plan and selected subagent-driven execution on 2026-10-16. Work is on isolated branch `codex/poker-learning-path`; Task 1 is next.
+Status: Complete. Tasks 1–4c and Task 5 are implemented, verified and independently reviewed on `codex/poker-learning-path`. The user removed the separate mobile browser project from scope; the single web app retains responsive layouts and Playwright/CI run desktop only.
 
 ## Objective
 

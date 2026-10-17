@@ -16,13 +16,13 @@ Node.js 24 or later is required. If Node is missing from `PATH`, check an alread
 
 ## Choose checks by change
 
-| Change                                            | Checks and acceptance                                                                                                                                                                                                         |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Workflow/Markdown only                            | Read entrypoint as a fresh agent; follow every local link; verify commands against package/configs; `git diff --check`; check formatting on explicit doc paths if useful. No new application tests needed solely for prose.   |
-| Poker engine, odds, policies, ranges              | Relevant Vitest suites, then `npm test` and `npm run build`. Check privacy, deterministic/replay compatibility, chip conservation, and independently specified outcomes appropriate to the changed behavior.                  |
-| API, shared types, SQLite/worker bridge           | Relevant integration tests, `npm test`, `npm run build`; confirm validation, idempotency, persistence/revision behavior, and read-only calculations. Shared contracts must precede dependent UI work.                         |
-| UI or integrated user flow                        | Relevant desktop/mobile browser cases, `npm run build`, and associated unit/integration checks; exercise keyboard/focus, loading/error/stale state, and narrow-screen bounds. Full browsers for broad UI/integration changes. |
-| Full-tree delivery / GitHub upload requested here | `npm test`, `npm run build`, and `npm run test:browser`, documentation review, staged-content review, remote verification. Explicitly report optional live solver coverage.                                                   |
+| Change                                            | Checks and acceptance                                                                                                                                                                                                       |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workflow/Markdown only                            | Read entrypoint as a fresh agent; follow every local link; verify commands against package/configs; `git diff --check`; check formatting on explicit doc paths if useful. No new application tests needed solely for prose. |
+| Poker engine, odds, policies, ranges              | Relevant Vitest suites, then `npm test` and `npm run build`. Check privacy, deterministic/replay compatibility, chip conservation, and independently specified outcomes appropriate to the changed behavior.                |
+| API, shared types, SQLite/worker bridge           | Relevant integration tests, `npm test`, `npm run build`; confirm validation, idempotency, persistence/revision behavior, and read-only calculations. Shared contracts must precede dependent UI work.                       |
+| UI or integrated user flow                        | Relevant desktop browser cases, `npm run build`, and associated unit/integration checks; exercise keyboard/focus and loading/error/stale state. Full browsers for broad UI/integration changes.                             |
+| Full-tree delivery / GitHub upload requested here | `npm test`, `npm run build`, and `npm run test:browser`, documentation review, staged-content review, remote verification. Explicitly report optional live solver coverage.                                                 |
 
 ## Unit/integration and production build
 
@@ -33,7 +33,19 @@ npm run build
 
 `npm test` runs `tests/**/*.test.ts` via Vitest, including API integration tests. `npm run build` runs `tsc --noEmit`, builds the Vite UI, and bundles the API plus assistant worker. There is no separate lint script. Target a relevant suite with `npx vitest run tests/<actual-file>.test.ts`; choose the actual path from `rg --files tests`.
 
-## Desktop and mobile browser behavior
+## Poker foundations learning path
+
+Run these focused checks from the repository root after changing course content, the learning API, or the course UI:
+
+```sh
+npx vitest run tests/learning-path-content.test.ts tests/learning-path-api.test.ts
+npm run build
+npm run test:browser -- tests/browser/learning-path.spec.ts
+```
+
+The browser spec runs the desktop project only. It covers answer privacy before submission, visible exercise assumptions, exact answer retry and reload recovery, keyboard/focus behavior, fresh versus reused transfer labels and counts, missed-skill review, new repeat instances and direct access to Bot/Cash practice. Content/API tests cover strict versioned DTOs, independently checked poker arithmetic, idempotent event writes, cursor-pinned exports, explicit clear behavior and compatibility with older data. They use temporary/test databases; do not point destructive verification at a learner's database. For full release verification, also run `npm test` and review the optional solver status below.
+
+## Desktop browser behavior
 
 One-time browser setup:
 
@@ -47,7 +59,7 @@ On Linux, install required system dependencies using `npx playwright install --w
 npm run test:browser
 ```
 
-Playwright config starts its own API on `127.0.0.1:3002` and Vite on `127.0.0.1:5174`, uses `data/browser-test.sqlite`, one worker, and both `desktop` and `mobile` projects. Those ports must be free; normal app ports 3001/5173 may remain running. Browser tests clear their test DB between cases. Do not launch multiple full browser runs concurrently against these shared ports/database.
+Playwright config starts its own API on `127.0.0.1:3002` and Vite on `127.0.0.1:5174`, uses `data/browser-test.sqlite`, one worker and the desktop project. Those ports must be free; normal app ports 3001/5173 may remain running. Browser tests clear their test DB between cases. Do not launch multiple full browser runs concurrently against these shared ports/database.
 
 For a scoped flow use an actual browser filename, for example:
 
@@ -92,7 +104,7 @@ Prerequisites: optional pinned GTOpen install built by `npm run solver:setup`, i
 
 ## GitHub automated checks
 
-[`.github/workflows/verify.yml`](.github/workflows/verify.yml) runs on pushes, pull requests, and manual dispatch. It uses Ubuntu with Node 24, installs locked dependencies, runs unit/integration tests and the production build, installs Chromium with Linux dependencies, and runs the full desktop/mobile browser suite. `POKER_SOLVER_DISABLED=1` keeps CI independent of the optional external solver; real-engine coverage is a separate local check. Failed browser artifacts are uploaded for inspection.
+[`.github/workflows/verify.yml`](.github/workflows/verify.yml) runs on pushes, pull requests, and manual dispatch. It uses Ubuntu with Node 24, installs locked dependencies, runs unit/integration tests and the production build, installs Chromium with Linux dependencies, and runs the full desktop browser suite. `POKER_SOLVER_DISABLED=1` keeps CI independent of the optional external solver; real-engine coverage is a separate local check. Failed browser artifacts are uploaded for inspection.
 
 A committed workflow is not a CI pass. After upload, inspect the actual run and record its result or pending status in `PROGRESS.md`. Linux CI also provides another environment when a local browser runtime cannot launch.
 
@@ -106,7 +118,7 @@ Use `npm run dev`, or `npm run build` then `npm start` for built assets. Use ded
 - Online cash Decision Lab: default nine seats; select eight/two; distinguish table seats from active opponents and exclude two-seat multiway practice. Check public history pot/stack accounting, supplied-range/rake assumptions, action/reason/estimate/confidence submission, tracked hints, immutable first answers, staged guided follow-ups, fresh review, reload, error retry, export and clear. Independent, assisted and guided counts must stay separate.
 - Bot table: start a supported table, make legal actions, hide private cards until completion, finish/resume/replay without losing the original game's data.
 - Study tools: inspect odds/assistant/chart, then act or switch hands; results are public-only and stale results clear. Loading/error/retry and Escape/focus return work.
-- Narrow screens: controls/cards/dialogs remain usable without horizontal overflow; bot-model assumptions and unsupported solver contexts remain explicit.
+- Standard browser viewport: controls/cards/dialogs remain usable; bot-model assumptions and unsupported solver contexts remain explicit.
 - Ordinary practice works with the optional solver absent and no external requests after installation.
 
 These are acceptance prompts; record what was actually exercised. Existing automated tests can supply this evidence without repeating every manual action.

@@ -1,37 +1,32 @@
 # Current handoff
 
-Updated: 2026-10-16. Current request: implement the approved beginner-first poker learning path. Work is in isolated worktree `/Users/a../.codex/worktrees/poker-learning-path/poker-practice` on `codex/poker-learning-path`, based on `7b07024`. The prior requested event-history, usage and fast-assessment source changes were copied into this worktree for integration; the original `main` checkout and ignored learner data were not changed. No upload or external publication was requested.
+Updated: 2026-10-16. The approved beginner-first poker learning path is implemented, verified and independently reviewed on `codex/poker-learning-path` in `/Users/a../.codex/worktrees/poker-learning-path/poker-practice`. Task 4c adds distinct completed-lesson progress and recommends the next unfinished lesson. The user removed the separate mobile browser project from scope; the single web app retains responsive layouts while Playwright and CI run desktop only. The app is running at `http://127.0.0.1:5173/` with a temporary database at `/tmp/poker-practice-codex.sqlite`. The original `/Users/a../poker-practice` checkout and learner data remain untouched.
 
-## Product discovery
+## Product and implementation
 
-The user wants to serve newer and experienced players, starting with fundamentals, and preserve practice data for reliable usage analysis and possible future ML. The user approved the curriculum-first design, implementation plan, and subagent-driven execution. The plan is `docs/superpowers/plans/2026-10-16-poker-learning-path.md`; implementation has not started yet. The lead clarified that Task 2 owns the event-derived `reviewSuggestion` projection, while Task 4 adds course content and black-box coverage; this resolves a task ownership gap without changing the API contract.
+The user approved a beginner-first path for newer and experienced players and selected subagent-driven execution. The approved design/spec is [here](docs/superpowers/specs/2026-10-16-poker-learning-path-design.md); the task plan is [here](docs/superpowers/plans/2026-10-16-poker-learning-path.md). The course has five lessons in four units: legal actions, hand rankings, position/opening baselines, pot odds with a visible range, and introductory postflop reasoning. It stays local and does not train or use ML.
 
-## Learning-path implementation plan
+The event ledger preserves versioned lesson/question/answer/feedback/completion facts; exact answer retries recover saved receipts. Progress, missed-skill review, distinct lesson completion and next-lesson recommendations rebuild from events. Course engagement counts stay separate from fresh-transfer results, and reused transfer variants are labeled and excluded from the fresh count. Answers remain hidden until submission. Exports are explicit and cursor-pinned; full SQLite backups use validated restore to a new path. Legacy summaries stay separate rather than receiving fabricated history.
 
-- Draft: [implementation plan](docs/superpowers/plans/2026-10-16-poker-learning-path.md). It sequences the versioned course contract, event/API persistence and recovery, the first accessible lesson slice, the rest of the beginner curriculum, and final docs/verification.
-- Handoff checks: Prettier passed on the plan, spec and handoff docs using the repository-local CLI with Node 24.21.0; `git diff --check` passed for tracked handoff docs; spec and plan links resolve; no placeholders remain.
-- Scope: this turn changed planning/handoff documents only. Product tests and build were not run because no learning-path implementation was written.
-- Next action: run baseline checks on this copied branch, then dispatch the Task 1 implementer and a fresh task reviewer. Preserve the original checkout and local learner data.
-
-## Completed controlled experiment and speed comparison
-
-- `npm run ml:mistake-test` generated 600 fresh synthetic deal groups / 1,200 policy decisions. The fixed stress policy folds premium hands 80% of the time; matched control folds them 10% of the time. Model, policy and thresholds stayed frozen. Synthetic rows are in ignored `data/ml/mistake-experiment.jsonl`; no learner database or usage rows were read or changed.
-- On the 200-deal premium challenge, 125 choices changed between policies and the conditional teacher confirmed 123. Raw probabilities at a diagnostic-only threshold of 0.5 achieved 98.1% recall and precision for the leaky cohort. The deployed model made **zero positive gap flags**, abstaining on 156/159 teacher-positive leaky choices and returning a false “no clear gap” on three. In the natural cohort, all 11 changed premium folds were teacher-confirmed, and the model abstained on all 11. It responds in raw score, but shipped behavior does not flag this mistake.
-- Teacher positives are conditional judgments under the authored opponent model and sampling assumptions, not validated poker errors. The challenge is premium-enriched and cannot estimate population prevalence or human personalization.
-- `npm run ml:compare-speed` compared actual Quick assessment and detailed hint HTTP endpoints on 40 identical fresh decisions, alternating order with five warmup pairs. On Apple M1 Pro / Node 24: quick median **1.16 ms**, p95 **1.64 ms**; detailed hint median **1,001 ms**, p95 **1,162 ms**. Ratio of medians **863×** (median paired ratio 881×). First requests: 36 ms and 1,160 ms. The detailed endpoint samples 1,600 worlds and returns a multi-action explanation; quick may abstain, so this is a latency comparison with different outputs. Process startup, compilation, setup and browser rendering are excluded.
-- Exact results, protocol, limitations and reproduction: [mistake experiment](docs/mistake-bot-experiment.md), [model card](packages/poker/models/README.md), [mistake report](packages/poker/models/mistake-experiment-report.json), [speed report](packages/poker/models/fast-assessment-speed-comparison.json).
+Learning-path commit sequence: `ac2db44` / `97807c1` (contract and first lesson/fix), `8306b88` / `4ae0bfd` (event API and review fix), `ff8f881` / `de90358` (UI and recovery/focus fix), `816dc90` (complete curriculum), and `26526a5` (fresh-transfer progress labels). The earlier requested event sourcing, local usage, backup/recovery and quick assessment are in baseline commit `eae3193`.
 
 ## Verification
 
-- `npm test`: **381 passed, 2 optional tests skipped**; 40 files passed, one skipped; 18.40 seconds.
-- `npm run build`: passed TypeScript, Vite and both API bundles.
-- Independent recomputation verified all 600 deal groups, 1,200 decisions, the frozen model and source hashes, disjointness from 13 prior synthetic datasets, every reported cohort metric and the paired bootstrap interval.
-- The timing runner exercised actual loopback HTTP endpoints against a temporary file-backed database and asserts that application database rows remain unchanged. Independent report source/model hash check passed.
-- Explicit Prettier check for the edited README/model/experiment docs and experiment scripts passed; `git diff --check` passed.
-- Existing historical UI/browser evidence remains 160/160 desktop/mobile from the prior feature delivery; no browser tests were needed for this documentation and benchmark-only change.
+- Independent content/API review approved Task 4 with no findings. Independent browser run passed **20/20** (10 desktop, 10 mobile). Lead focused rerun: **21 API/content tests passed**.
+- Task 4b independent UI review approved with no findings. Independent browser run passed **22/22** (11 desktop, 11 mobile), including zero-state counts, fresh/reused labels, final UI/API count agreement, retry/resume, keyboard/focus, and mobile bounds.
+- `npm test -- --maxWorkers=1`: **403 passed, 2 optional skips**; 42 files passed and one optional file skipped. A concurrent run had one timeout in an unchanged table-review test; the serial rerun passed without code changes.
+- `npm run build`: passed TypeScript, Vite, API and assistant-worker bundles.
+- Task 4c RED: focused tests **1 failed, 21 passed** and the new browser regression failed as expected. GREEN: focused API/content **22 passed**, learning-path browser **12/12 desktop**, full serial suite **404 passed / 2 optional skips**, build, Prettier and diff checks passed.
+- After the user removed the mobile Playwright project, `npm run test:browser` listed one `desktop` project and passed **92/92** in 2.2 minutes. Playwright/CI documentation now names the desktop-only suite.
+- Final independent scoped review marked all three findings addressed and found no new Critical or Important defects. Final Prettier and staged/unstaged `git diff --check` passed. Task 4c and documentation changes are committed separately after exact-path staging.
+- Optional live GTOpen tests were not run; the course requires no solver.
 
-## Existing preserved work
+## Earlier model assessment
 
-Event sourcing/replay, transactional idempotent table commands, local usage capture and recovery, and the frozen narrow quick-assessment model remain uncommitted. Usage collection is local and explicit; synthetic test rows are not counted as learner usage and are not used to retrain the model. The model currently supports only fresh heads-up button openings at 100 BB against policy-2 Mara and has no validated positive-gap threshold.
+The controlled synthetic mistake test used 600 fresh deal groups / 1,200 policy decisions. Raw scores reacted to an injected premium-overfold pattern, but the deployed model made **zero positive mistake calls** and abstained on most teacher-positive challenge choices; synthetic teacher labels are conditional on authored assumptions, not validated human skill. In the paired local endpoint benchmark, Quick assessment median latency was **1.16 ms** versus **1,001 ms** for detailed hints (**863×**), with different outputs and more abstention in Quick. Full protocols and limitations are in [the mistake experiment](docs/mistake-bot-experiment.md) and [model card](packages/poker/models/README.md).
 
-Next action: baseline verification is pending; then begin Task 1 on the approved feature branch. The original dirty checkout and learner data remain untouched.
+## Known limits and next action
+
+The event export pins a high-water cursor but currently validates/materializes the whole ledger before filtering each page. This is a per-page performance cost if a local ledger grows; preserve the behavior and consider cursor-bounded SQL if measurements justify it. Learning-path results describe app questions and assumptions, not general poker skill or demonstrated improvement. No learner database or synthetic experiment rows were used for these checks.
+
+The plan is complete. Optional live GTOpen tests were not run, and the event export's per-page cost still grows with the local ledger size; both limits are documented. No learner database or synthetic experiment rows were used for verification.
