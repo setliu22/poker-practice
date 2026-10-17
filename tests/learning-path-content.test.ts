@@ -460,6 +460,8 @@ describe("versioned learning path contract and content", () => {
     const progress = {
       startedLessons: 1,
       completedLessons: 0,
+      completedContentIds: [],
+      nextLessonContentId: "table-flow",
       resumedLessons: 0,
       answerAttempts: 0,
       transferAttempts: 0,
@@ -469,6 +471,16 @@ describe("versioned learning path contract and content", () => {
       reviewSuggestion: null,
     };
     expect(learningPathProgressSchema.parse(progress)).toEqual(progress);
+    for (const fields of [
+      { completedContentIds: [""] },
+      { completedContentIds: "table-flow" },
+      { nextLessonContentId: "" },
+      { nextLessonContentId: { contentId: "table-flow" } },
+    ])
+      expect(
+        learningPathProgressSchema.safeParse({ ...progress, ...fields })
+          .success,
+      ).toBe(false);
     expect(
       learningPathProgressSchema.safeParse({
         ...progress,

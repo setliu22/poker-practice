@@ -74,11 +74,9 @@ export function tableRoutes(db: Database.Database) {
     const state = loadTable(db, req.params.id);
     if (!state) return void res.status(404).json({ error: "Table not found." });
     if (state.revision !== revision)
-      return void res
-        .status(409)
-        .json({
-          error: "This decision changed. Assess the current action instead.",
-        });
+      return void res.status(409).json({
+        error: "This decision changed. Assess the current action instead.",
+      });
     const invalid = validatePublicCandidate(
       publicAssessmentSnapshot(state),
       candidate,
@@ -261,7 +259,7 @@ export function tableRoutes(db: Database.Database) {
       version: 1,
       tableId: state.id,
       revision: state.revision,
-      note: "Labels compare actions within the authored bot model, not optimal play or general poker skill. Null labels are unscored or inconclusive. Replay, branch, restarted and partial legacy decisions are excluded from independent training samples. Split evaluation by groupId (hand), never by decision row. No supervised detector has been trained.",
+      note: "Labels compare actions within the authored bot model, not optimal play or general poker skill. Null labels are unscored or inconclusive. Replay, branch, restarted and partial legacy decisions are excluded from independent training samples. Split evaluation by groupId (hand), never by decision row. The narrow fast-assessment model was trained separately on synthetic examples, without learner records. Broad human leak detection and learner personalization remain untrained.",
       examples,
       practiceCandidates: examples
         .filter((example) => example.label?.modeledGap === true)

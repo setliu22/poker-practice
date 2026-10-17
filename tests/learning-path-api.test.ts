@@ -71,6 +71,74 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 describe("local learning path ledger", () => {
+  it("rebuilds distinct course completion and recommends the first unfinished lesson through repeats and restart", async () => {
+    const progress = async () => {
+      const result = (await request(app).get(`${base}/progress`).expect(200))
+        .body;
+      learningPathProgressSchema.parse(result);
+      return result;
+    };
+    expect(await progress()).toMatchObject({
+      completedLessons: 0,
+      completedContentIds: [],
+      nextLessonContentId: "table-flow",
+    });
+    const first = await start();
+    const root = `${base}/instances/${first.body.instanceId}/questions/${first.state.question.id}`;
+    await request(app).post(`${root}/presented`).send(ack()).expect(200);
+    await answer(first.body.instanceId, first.state.question.id).expect(200);
+    expect(await progress()).toMatchObject({
+      completedContentIds: [],
+      nextLessonContentId: "table-flow",
+    });
+    await request(app).post(`${root}/feedback-shown`).send(ack()).expect(200);
+    await finish(first.body.instanceId);
+    const repeat = await start();
+    expect(await progress()).toMatchObject({
+      completedLessons: 1,
+      completedContentIds: ["table-flow"],
+      nextLessonContentId: "hand-rankings",
+    });
+    await finish(repeat.body.instanceId);
+    db.close();
+    db = openDatabase(join(directory, "test.sqlite"));
+    app = createApp(db);
+    expect(await progress()).toMatchObject({
+      completedLessons: 2,
+      completedContentIds: ["table-flow"],
+      nextLessonContentId: "hand-rankings",
+    });
+    // Direct access can complete a later lesson without skipping an earlier gap.
+    for (const contentId of [
+      "postflop-reasoning",
+      "hand-rankings",
+      "position-opening",
+      "pot-odds-equity",
+    ]) {
+      const opened = await start({ contentId });
+      await finish(opened.body.instanceId);
+      if (contentId === "postflop-reasoning")
+        expect((await progress()).nextLessonContentId).toBe("hand-rankings");
+    }
+    const complete = await progress();
+    expect(complete.completedLessons).toBe(6);
+    expect(complete.completedContentIds).toHaveLength(5);
+    expect(new Set(complete.completedContentIds)).toEqual(
+      new Set([
+        "table-flow",
+        "hand-rankings",
+        "position-opening",
+        "pot-odds-equity",
+        "postflop-reasoning",
+      ]),
+    );
+    expect(complete.nextLessonContentId).toBeNull();
+    await request(app).delete(`${base}/progress`).expect(200);
+    expect(await progress()).toMatchObject({
+      completedContentIds: [],
+      nextLessonContentId: "table-flow",
+    });
+  });
   it("requires presentation before answers and feedback acknowledgement before advancing or completing", async () => {
     const { body, state } = await start();
     learningPathInstanceStateSchema.parse(state);

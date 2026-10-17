@@ -4,6 +4,89 @@ test.beforeEach(async ({ request }) => {
   await request.delete("/api/v1/learning-path/progress");
 });
 
+test("course home preserves completed lessons and recommends the next unfinished lesson after repeats and reload", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/");
+  const recommendation = page.getByRole("region", {
+    name: "Recommended next lesson",
+    exact: true,
+  });
+  await expect(recommendation).toContainText("Table flow and legal actions");
+  const instances: string[] = [];
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await page
+      .getByRole("button", {
+        name: "Start Table flow and legal actions",
+        exact: true,
+      })
+      .click();
+    const progress = await (
+      await request.get("/api/v1/learning-path/progress")
+    ).json();
+    instances.push(progress.activeInstanceId);
+    for (const name of [
+      "Check",
+      "Call 10",
+      "30 total",
+      "Deal the three-card flop",
+      attempt === 0 ? "Check" : "Fold, call, or make a legal raise",
+    ]) {
+      await page.getByRole("radio", { name, exact: true }).check();
+      await page
+        .getByRole("button", { name: "Submit answer", exact: true })
+        .click();
+      await expect(
+        page.getByRole("region", { name: "Path feedback" }),
+      ).toBeVisible();
+      await page
+        .getByRole("button", { name: "Continue lesson", exact: true })
+        .click();
+    }
+    await expect(
+      page.getByRole("heading", { name: "Lesson complete", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Back to path", exact: true })
+      .click();
+    await page.reload();
+    await expect(
+      page.getByRole("note", {
+        name: "Completed Table flow and legal actions",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(recommendation).toContainText("Build the best five-card hand");
+    await expect(
+      page.getByText("1 of 5 lessons completed", { exact: true }),
+    ).toBeVisible();
+    const after = await (
+      await request.get("/api/v1/learning-path/progress")
+    ).json();
+    expect(after).toMatchObject({
+      completedLessons: attempt + 1,
+      completedContentIds: ["table-flow"],
+      nextLessonContentId: "hand-rankings",
+    });
+  }
+  expect(new Set(instances).size).toBe(2);
+  await page
+    .getByRole("button", {
+      name: "Continue with Build the best five-card hand",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Count both pairs", exact: true }),
+  ).toBeFocused();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
 test("beginner lesson preserves a committed answer retry, resumes, reviews and clears only its path", async ({
   page,
   request,

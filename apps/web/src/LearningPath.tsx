@@ -366,6 +366,10 @@ export function LearningPath() {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }, "data");
   }
+  const lessons = catalog?.units.flatMap((unit) => unit.lessons) ?? [];
+  const nextLesson = lessons.find(
+    (lesson) => lesson.contentId === progress?.nextLessonContentId,
+  );
   return (
     <section
       className="panel learning-path"
@@ -423,6 +427,44 @@ export function LearningPath() {
         </div>
       )}
       {!catalog && !error && <p role="status">Loading your course…</p>}
+      {!instance && catalog && progress && (
+        <div role="region" aria-label="Recommended next lesson">
+          <p>
+            {
+              lessons.filter((lesson) =>
+                progress.completedContentIds.includes(lesson.contentId),
+              ).length
+            }{" "}
+            of {lessons.length} lessons completed
+          </p>
+          {nextLesson ? (
+            <>
+              <p>Recommended next lesson: {nextLesson.title}</p>
+              <button
+                disabled={busy}
+                className="primary"
+                onClick={() => void start(nextLesson.contentId)}
+              >
+                Continue with {nextLesson.title}
+              </button>
+            </>
+          ) : (
+            <p>Course complete. Repeat any lesson for more practice.</p>
+          )}
+          {progress.reviewSuggestion && (
+            <>
+              <p>{progress.reviewSuggestion.reason}</p>
+              <button
+                disabled={busy}
+                className="secondary"
+                onClick={() => void start(progress.reviewSuggestion!.contentId)}
+              >
+                Review missed ideas
+              </button>
+            </>
+          )}
+        </div>
+      )}
       {!instance &&
         catalog &&
         catalog.units.map((unit) => (
@@ -431,6 +473,11 @@ export function LearningPath() {
             {unit.lessons.map((lesson) => (
               <div key={lesson.contentId}>
                 <p>{lesson.title}</p>
+                {progress?.completedContentIds.includes(lesson.contentId) && (
+                  <p role="note" aria-label={`Completed ${lesson.title}`}>
+                    Completed · Repeat any time
+                  </p>
+                )}
                 <button
                   disabled={busy}
                   className="primary"

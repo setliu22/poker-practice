@@ -197,6 +197,8 @@ export function learningPathRoutes(db: Database.Database): Router {
     const result: LearningPathProgress = {
       startedLessons: opens.length,
       completedLessons: 0,
+      completedContentIds: [],
+      nextLessonContentId: null,
       resumedLessons: 0,
       answerAttempts: 0,
       transferAttempts: 0,
@@ -211,6 +213,13 @@ export function learningPathRoutes(db: Database.Database): Router {
         .map((e) => e.instanceId),
     );
     result.completedLessons = completed.size;
+    result.completedContentIds = [
+      ...new Set(
+        events
+          .filter((e) => e.kind === "lesson-completed")
+          .map((e) => e.contentId),
+      ),
+    ];
     result.resumedLessons = new Set(
       events
         .filter((e) => e.kind === "lesson-resumed")
@@ -270,6 +279,10 @@ export function learningPathRoutes(db: Database.Database): Router {
     const lessons = getLearningPathCatalog().units.flatMap(
       (unit) => unit.lessons,
     );
+    result.nextLessonContentId =
+      lessons.find(
+        (lesson) => !result.completedContentIds.includes(lesson.contentId),
+      )?.contentId ?? null;
     for (const mistake of mistakes) {
       // Cursors order committed feedback independently of equal wall times.
       // The first catalog match breaks ties between lessons for that skill.
