@@ -107,6 +107,8 @@ export const learningPathProgressSchema = z
   .object({
     startedLessons: count,
     completedLessons: count,
+    completedToday: z.boolean(),
+    currentStreakDays: count,
     completedContentIds: z.array(id),
     nextLessonContentId: id.nullable(),
     resumedLessons: count,

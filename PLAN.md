@@ -1,6 +1,6 @@
 # Active plan
 
-Status: Complete. Tasks 1–4c and Task 5 are implemented, verified and independently reviewed on `codex/poker-learning-path`. The user removed the separate mobile browser project from scope; the single web app retains responsive layouts and Playwright/CI run desktop only.
+Status: Complete for the approved daily-practice extension. The original learning-path release is complete; daily practice is implemented, reviewed and verified on `codex/poker-learning-path`. The separate mobile browser project remains removed; the single web app retains responsive layouts and Playwright/CI run desktop only.
 
 ## Objective
 
@@ -15,6 +15,22 @@ Implement a reviewable, task-by-task Duolingo-inspired poker learning product se
 - Progress and review summaries can be rebuilt. Answers, displayed assistance, teacher labels and model predictions remain distinct. No wins/losses as decision truth.
 - Preserve explicit local exports/backups and clear-data behavior. No automatic uploads or ML training.
 - Sequence: one beginner path + ledger; deterministic spaced review/mixed sessions; future offline ML evaluation only with opt-in real data and learner/scenario holdouts, and only if it beats a transparent baseline with safe abstention.
+
+## Current bounded extension: daily practice loop
+
+**Status:** Complete. The daily card and event-derived practice streak are implemented; midnight/DST freshness, focus recovery, and overlapping progress-read behavior are covered and independently reviewed. The user confirmed a daily-practice home experience after noting that the existing course path lacked a daily habit loop.
+
+**Outcome:** Make one short practice session the primary course-home action while preserving the open lesson map and separating practice consistency from poker-skill evidence.
+
+**Acceptance:**
+
+- A visible “Today's practice” card appears before the course catalog. It resumes an active lesson, otherwise starts the next unfinished lesson, otherwise recommends the latest missed-skill lesson; if the course is complete with no missed skill, it invites the learner to choose any lesson.
+- Mark today's practice complete only after a committed `lesson-completed` event. Derive the current practice-day streak and today's completion from the immutable event ledger, using the browser's IANA time zone for calendar-day boundaries. A streak measures completion consistency only; it is visibly separate from fresh-transfer results and not described as skill or mastery.
+- Keep the progress read endpoint read-only. Do not add a migration, account, remote call, model, notification, mobile project, streak freeze, leaderboard, XP or lockout.
+- Add focused API tests for empty progress, completion-derived day/streak, repeated completions on one day, missed days, timezone boundaries and invalid time zones; add strict DTO coverage and a desktop browser flow for the home action and completion state.
+- Update the learning-path data contract docs and final handoff. Run focused API/content tests, desktop browser learning-path suite, build, serial full Vitest, Prettier and diff checks.
+
+**Ownership:** Implementation and review are complete. The lead integrated the exact scoped product, test, data-contract and handoff files; the implementation worker did not stage or commit.
 
 ## Spec acceptance
 

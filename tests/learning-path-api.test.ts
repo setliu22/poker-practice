@@ -69,6 +69,220 @@ afterEach(() => {
   db.close();
   rmSync(directory, { recursive: true, force: true });
   vi.restoreAllMocks();
+  vi.useRealTimers();
+});
+describe("daily practice projection", () => {
+  function completion(createdAt: string) {
+    const installation = db
+      .prepare("SELECT id FROM usage_installation")
+      .get() as { id: string };
+    const event = learningPathEventSchema.parse({
+      cursor: 1,
+      eventId: randomUUID(),
+      schemaVersion: 1,
+      installationId: installation.id,
+      sessionId: randomUUID(),
+      instanceId: randomUUID(),
+      contentId: "table-flow",
+      contentVersion: "1",
+      createdAt,
+      kind: "lesson-completed",
+      payload: {},
+    });
+    db.prepare(
+      "INSERT INTO learning_path_events(event_id,schema_version,installation_id,session_id,instance_id,content_id,content_version,kind,created_at,payload) VALUES(?,?,?,?,?,?,?,?,?,?)",
+    ).run(
+      event.eventId,
+      1,
+      event.installationId,
+      event.sessionId,
+      event.instanceId,
+      event.contentId,
+      event.contentVersion,
+      event.kind,
+      event.createdAt,
+      "{}",
+    );
+  }
+  it("counts only committed completions, rebuilds after restart, and clears without mutating progress reads", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-16T12:00:00Z"));
+    const read = async () =>
+      (await request(app).get(`${base}/progress`).expect(200)).body;
+    expect(await read()).toMatchObject({
+      completedToday: false,
+      currentStreakDays: 0,
+    });
+    const opened = await start();
+    expect(await read()).toMatchObject({
+      completedToday: false,
+      currentStreakDays: 0,
+    });
+    await finish(opened.body.instanceId);
+    const before = db
+      .prepare("SELECT * FROM learning_path_events ORDER BY cursor")
+      .all();
+    expect(await read()).toMatchObject({
+      completedToday: true,
+      currentStreakDays: 1,
+    });
+    expect(await read()).toMatchObject({
+      completedToday: true,
+      currentStreakDays: 1,
+    });
+    expect(
+      db.prepare("SELECT * FROM learning_path_events ORDER BY cursor").all(),
+    ).toEqual(before);
+    db.close();
+    db = openDatabase(join(directory, "test.sqlite"));
+    app = createApp(db);
+    expect(await read()).toMatchObject({
+      completedToday: true,
+      currentStreakDays: 1,
+    });
+    await request(app).delete(`${base}/progress`).expect(200);
+    expect(await read()).toMatchObject({
+      completedToday: false,
+      currentStreakDays: 0,
+    });
+  });
+  it.each([
+    {
+      name: "same-day repeats count once",
+      now: "2026-10-16T18:00:00Z",
+      zone: "UTC",
+      dates: [
+        "2026-10-15T12:00:00Z",
+        "2026-10-16T10:00:00Z",
+        "2026-10-16T11:00:00Z",
+      ],
+      today: true,
+      streak: 2,
+    },
+    {
+      name: "yesterday keeps the streak active",
+      now: "2026-10-16T18:00:00Z",
+      zone: "UTC",
+      dates: ["2026-10-14T12:00:00Z", "2026-10-15T12:00:00Z"],
+      today: false,
+      streak: 2,
+    },
+    {
+      name: "a missed full day resets the streak",
+      now: "2026-10-16T18:00:00Z",
+      zone: "UTC",
+      dates: ["2026-10-14T12:00:00Z"],
+      today: false,
+      streak: 0,
+    },
+    {
+      name: "today starts again after a gap",
+      now: "2026-10-16T18:00:00Z",
+      zone: "UTC",
+      dates: ["2026-10-14T12:00:00Z", "2026-10-16T12:00:00Z"],
+      today: true,
+      streak: 1,
+    },
+    {
+      name: "New York midnight differs from UTC",
+      now: "2026-10-16T03:30:00Z",
+      zone: "America/New_York",
+      dates: ["2026-10-15T03:30:00Z", "2026-10-16T02:00:00Z"],
+      today: true,
+      streak: 2,
+    },
+    {
+      name: "Tokyo advances the calendar day",
+      now: "2026-10-16T00:30:00Z",
+      zone: "Asia/Tokyo",
+      dates: ["2026-10-15T14:00:00Z"],
+      today: false,
+      streak: 1,
+    },
+    {
+      name: "year boundary",
+      now: "2027-01-01T12:00:00Z",
+      zone: "UTC",
+      dates: [
+        "2026-12-30T12:00:00Z",
+        "2026-12-31T12:00:00Z",
+        "2027-01-01T10:00:00Z",
+      ],
+      today: true,
+      streak: 3,
+    },
+    {
+      name: "leap month boundary",
+      now: "2028-03-01T12:00:00Z",
+      zone: "UTC",
+      dates: [
+        "2028-02-28T12:00:00Z",
+        "2028-02-29T12:00:00Z",
+        "2028-03-01T10:00:00Z",
+      ],
+      today: true,
+      streak: 3,
+    },
+    {
+      name: "spring DST uses calendar days",
+      now: "2026-03-09T04:30:00Z",
+      zone: "America/New_York",
+      dates: [
+        "2026-03-07T17:00:00Z",
+        "2026-03-08T16:00:00Z",
+        "2026-03-09T04:00:00Z",
+      ],
+      today: true,
+      streak: 3,
+    },
+    {
+      name: "fall DST repeats one day",
+      now: "2026-11-02T05:30:00Z",
+      zone: "America/New_York",
+      dates: [
+        "2026-10-31T16:00:00Z",
+        "2026-11-01T05:30:00Z",
+        "2026-11-01T06:30:00Z",
+      ],
+      today: false,
+      streak: 2,
+    },
+  ])("$name", async ({ now, zone, dates, today, streak }) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(now));
+    dates.forEach(completion);
+    const result = await request(app)
+      .get(`${base}/progress`)
+      .query({ timeZone: zone })
+      .expect(200);
+    learningPathProgressSchema.parse(result.body);
+    expect(result.body).toMatchObject({
+      completedToday: today,
+      currentStreakDays: streak,
+    });
+  });
+  it("defaults to UTC and rejects unsupported or malformed timezones", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-16T03:30:00Z"));
+    completion("2026-10-16T02:00:00Z");
+    expect(
+      (await request(app).get(`${base}/progress`).expect(200)).body,
+    ).toMatchObject({ completedToday: true, currentStreakDays: 1 });
+    for (const timeZone of [
+      "",
+      "Mars/Olympus",
+      "../UTC",
+      "+01:00",
+      " America/New_York ",
+    ])
+      await request(app)
+        .get(`${base}/progress`)
+        .query({ timeZone })
+        .expect(400);
+    await request(app)
+      .get(`${base}/progress?timeZone=UTC&timeZone=Asia/Tokyo`)
+      .expect(400);
+  });
 });
 describe("local learning path ledger", () => {
   it("rebuilds distinct course completion and recommends the first unfinished lesson through repeats and restart", async () => {

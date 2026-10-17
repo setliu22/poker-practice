@@ -61,6 +61,10 @@ async function api<T>(
     );
   return data as T;
 }
+function progressPath() {
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return `/progress?timeZone=${encodeURIComponent(timeZone)}`;
+}
 export function LearningPath() {
   const saved = useRef<Checkpoint>(checkpoint());
   const [catalog, setCatalog] = useState<LearningPathCatalog | null>(null);
@@ -77,6 +81,10 @@ export function LearningPath() {
     [stale, setStale] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [dataError, setDataError] = useState("");
+  const [dailyError, setDailyError] = useState("");
+  const progressRead = useRef(0);
+  const progressSuccess = useRef(0);
+  const dailyRetry = useRef<() => Promise<void>>(async () => {});
   const [clearError, setClearError] = useState("");
   const courseHeading = useRef<HTMLHeadingElement>(null);
   const dataRetry = useRef<() => Promise<void>>(async () => {});
@@ -127,8 +135,20 @@ export function LearningPath() {
       setBusy(false);
     }
   }
+  async function readProgress() {
+    const request = ++progressRead.current;
+    const summary = await api<LearningPathProgress>(progressPath());
+    // A failed newer read must not suppress the only usable snapshot.
+    // Once a newer read succeeds, an older response cannot replace it.
+    if (request > progressSuccess.current) {
+      progressSuccess.current = request;
+      setProgress(summary);
+      if (request === progressRead.current) setDailyError("");
+    }
+    return summary;
+  }
   async function refresh() {
-    setProgress(await api<LearningPathProgress>("/progress"));
+    await readProgress();
   }
   function display(state: LearningPathInstanceState) {
     setInstance(state);
@@ -146,10 +166,9 @@ export function LearningPath() {
   async function load() {
     const [course, summary] = await Promise.all([
       api<LearningPathCatalog>(""),
-      api<LearningPathProgress>("/progress"),
+      readProgress(),
     ]);
     setCatalog(course);
-    setProgress(summary);
     let id = saved.current.instanceId ?? summary.activeInstanceId;
     if (saved.current.start) {
       const state = await api<LearningPathInstanceState>(
@@ -190,6 +209,48 @@ export function LearningPath() {
   }
   useEffect(() => {
     void run(load);
+  }, []);
+  useEffect(() => {
+    let mounted = true;
+    let timer: number;
+    async function updateDaily() {
+      const request = progressRead.current + 1;
+      try {
+        await refresh();
+      } catch {
+        if (mounted && request === progressRead.current)
+          setDailyError(
+            "Daily practice status could not refresh and may be out of date.",
+          );
+      }
+    }
+    function scheduleMidnight() {
+      window.clearTimeout(timer);
+      const now = new Date();
+      const midnight = new Date(now);
+      // Advance the local calendar, since the next day can be 23 or 25 hours away.
+      midnight.setHours(24, 0, 0, 0);
+      timer = window.setTimeout(() => {
+        void updateDaily();
+        scheduleMidnight();
+      }, midnight.getTime() - now.getTime());
+    }
+    function returnToPage() {
+      if (document.visibilityState !== "visible") return;
+      scheduleMidnight();
+      void updateDaily();
+    }
+    dailyRetry.current = updateDaily;
+    scheduleMidnight();
+    window.addEventListener("focus", returnToPage);
+    document.addEventListener("visibilitychange", returnToPage);
+    return () => {
+      mounted = false;
+      progressSuccess.current = ++progressRead.current;
+      window.clearTimeout(timer);
+      window.removeEventListener("focus", returnToPage);
+      document.removeEventListener("visibilitychange", returnToPage);
+    };
   }, []);
   useEffect(() => {
     (instance
@@ -370,6 +431,18 @@ export function LearningPath() {
   const nextLesson = lessons.find(
     (lesson) => lesson.contentId === progress?.nextLessonContentId,
   );
+  const reviewLesson = lessons.find(
+    (lesson) => lesson.contentId === progress?.reviewSuggestion?.contentId,
+  );
+  const dailyLesson = nextLesson ?? reviewLesson;
+  const activePractice = !!progress?.activeInstanceId;
+  async function resumeDaily() {
+    if (!progress?.activeInstanceId) return;
+    saved.current.instanceId = progress.activeInstanceId;
+    persist();
+    await load();
+    (feedback ? feedbackHeading : heading).current?.focus();
+  }
   return (
     <section
       className="panel learning-path"
@@ -380,6 +453,68 @@ export function LearningPath() {
       <h1 ref={courseHeading} tabIndex={-1}>
         {catalog?.title ?? "Loading beginner path…"}
       </h1>
+      {progress && catalog && (
+        <div role="region" aria-labelledby="daily-practice-title">
+          <span className="eyebrow">One short lesson</span>
+          <h2 id="daily-practice-title">Today's practice</h2>
+          <p role="status">
+            {progress.completedToday
+              ? "Completed today"
+              : "Not completed today"}
+            {" · "}
+            {progress.currentStreakDays}-day practice streak
+          </p>
+          {dailyError && (
+            <div role="alert">
+              <p>{dailyError}</p>
+              <button
+                className="secondary"
+                onClick={() => void dailyRetry.current()}
+              >
+                Refresh daily status
+              </button>
+            </div>
+          )}
+          <p className="quiet">
+            Your streak counts days with a completed lesson. It measures
+            practice consistency and does not measure poker skill.
+          </p>
+          {activePractice ? (
+            <>
+              <p>Pick up your unfinished lesson.</p>
+              <button
+                className="primary"
+                disabled={busy}
+                onClick={() => void run(resumeDaily)}
+              >
+                Resume today's practice
+              </button>
+            </>
+          ) : dailyLesson ? (
+            <>
+              <p>
+                {nextLesson ? "Up next" : "Review a missed skill"}:{" "}
+                {dailyLesson.title}
+              </p>
+              <button
+                className="primary"
+                disabled={busy}
+                onClick={() => void start(dailyLesson.contentId)}
+              >
+                {progress.completedToday
+                  ? "Practice another lesson"
+                  : nextLesson
+                    ? "Start today's practice"
+                    : "Practice missed ideas"}
+              </button>
+            </>
+          ) : (
+            <p>
+              Course complete. Choose any lesson below for today's practice.
+            </p>
+          )}
+        </div>
+      )}
       {progress && (
         <p>
           {progress.completedLessons} lessons completed ·{" "}
@@ -442,7 +577,7 @@ export function LearningPath() {
               <p>Recommended next lesson: {nextLesson.title}</p>
               <button
                 disabled={busy}
-                className="primary"
+                className="secondary"
                 onClick={() => void start(nextLesson.contentId)}
               >
                 Continue with {nextLesson.title}
@@ -480,7 +615,7 @@ export function LearningPath() {
                 )}
                 <button
                   disabled={busy}
-                  className="primary"
+                  className="secondary"
                   onClick={() => void start(lesson.contentId)}
                 >
                   Start {lesson.title}

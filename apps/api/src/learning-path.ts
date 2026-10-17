@@ -191,12 +191,33 @@ export function learningPathRoutes(db: Database.Database): Router {
       conflict("Event ID already belongs to a different acknowledgement.");
     return true;
   }
-  function progress(): LearningPathProgress {
+  function progress(timeZone: string): LearningPathProgress {
+    const calendar = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      calendar: "gregory",
+      numberingSystem: "latn",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    // Convert local calendar labels to UTC day ordinals, never subtract 24 hours
+    // from a zoned instant: DST days can have 23 or 25 hours.
+    function dayOrdinal(date: Date): number {
+      const parts = calendar.formatToParts(date);
+      const part = (type: string) =>
+        Number(parts.find((item) => item.type === type)!.value);
+      const day = new Date(0);
+      day.setUTCFullYear(part("year"), part("month") - 1, part("day"));
+      return day.getTime() / 86_400_000;
+    }
+    const today = dayOrdinal(new Date());
     const events = readEvents(),
       opens = events.filter((e): e is Opened => e.kind === "lesson-opened");
     const result: LearningPathProgress = {
       startedLessons: opens.length,
       completedLessons: 0,
+      completedToday: false,
+      currentStreakDays: 0,
       completedContentIds: [],
       nextLessonContentId: null,
       resumedLessons: 0,
@@ -212,6 +233,17 @@ export function learningPathRoutes(db: Database.Database): Router {
         .filter((e) => e.kind === "lesson-completed")
         .map((e) => e.instanceId),
     );
+    const practiceDays = new Set(
+      events
+        .filter((event) => event.kind === "lesson-completed")
+        .map((event) => dayOrdinal(new Date(event.createdAt))),
+    );
+    result.completedToday = practiceDays.has(today);
+    let day = result.completedToday ? today : today - 1;
+    while (practiceDays.has(day)) {
+      result.currentStreakDays++;
+      day--;
+    }
     result.completedLessons = completed.size;
     result.completedContentIds = [
       ...new Set(
@@ -300,7 +332,26 @@ export function learningPathRoutes(db: Database.Database): Router {
     return result;
   }
   router.get("/", (_req, res) => res.json(getLearningPathCatalog()));
-  router.get("/progress", (_req, res) => res.json(progress()));
+  router.get("/progress", (req, res) => {
+    const timeZone = z
+      .string()
+      .min(1)
+      .max(100)
+      .refine((value) => {
+        // Intl also accepts numeric offsets; the API requires a named IANA zone.
+        if (!/^[A-Za-z][A-Za-z0-9._+-]*(?:\/[A-Za-z0-9._+-]+)*$/.test(value))
+          return false;
+        try {
+          new Intl.DateTimeFormat("en-US", { timeZone: value });
+          return true;
+        } catch {
+          return false;
+        }
+      }, "Use a supported IANA time zone.")
+      .default("UTC")
+      .parse(req.query.timeZone);
+    res.json(progress(timeZone));
+  });
   router.post("/instances", (req, res) => {
     const body = startLearningInstanceSchema.parse(req.body);
     const result = db

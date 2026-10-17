@@ -30,6 +30,16 @@ Presentation and feedback acknowledgements record that the client reached a disp
 
 The API reconstructs the current lesson state and progress from the event ledger rather than treating an editable progress row as the source of truth. Progress includes starts, completed instances (`completedLessons`), distinct completed lessons (`completedContentIds`), resumes, answer attempts and mistakes by skill. Only committed completion events advance course completion. `nextLessonContentId` recommends the first unfinished lesson in catalog order, or is null when all lessons have a completed instance. The course home shows completed markers and this recommendation while leaving every lesson available directly. Repeating a lesson adds another instance without removing its completed marker or advancing distinct completion. `reviewSuggestion` selects the most recent incorrect answer that has a matching submitted-answer event, ordered by event cursor, then maps its skill to the catalog. The catalog order resolves any skill-to-lesson tie.
 
+### Daily practice and calendar days
+
+The primary **Today's practice** card resumes an unfinished instance, otherwise starts the first unfinished catalog lesson, otherwise offers the latest missed-skill lesson. When every lesson is complete and there is no missed-skill suggestion, it invites a free lesson choice. It reuses the same versioned instance and exact-retry commands; there is no separate daily-session record.
+
+`GET /progress?timeZone=America%2FNew_York` derives `completedToday` (boolean) and `currentStreakDays` (nonnegative integer) only from committed immutable `lesson-completed` timestamps. The browser supplies its IANA time zone on every progress read. Omission defaults to UTC; malformed, repeated or unsupported zone values return 400 instead of silently selecting another zone. The server's current clock determines today. Changing the supplied zone recomputes historical calendar days in that zone; no historical timezone or mutable streak is stored.
+
+Multiple completions on one local calendar day count once. Consecutive completion days ending today form the current streak; if today is unfinished, a run ending yesterday stays active until today ends. A missed full day resets it. Calendar labels are converted to day ordinals before stepping backward, so month/year boundaries, leap days, and 23/25-hour daylight-saving days work without subtracting 24 hours from local instants. Reading progress appends no events and changes no receipts or statistics. Restart rebuilds the same projection; clearing path events clears daily completion and streak too.
+
+The daily status describes practice consistency only: a day with a completed lesson. It does not measure poker skill, mastery or retention, and appears separately from fresh-transfer answer results.
+
 ### Idempotent answers and recovery
 
 Each answer command has a UUID request ID. The server validates the current instance, question, content version and answer, then grades and writes the answer event, feedback event and exact response receipt in one SQLite transaction. It returns success only after commit. An exact retry returns the saved response without adding another answer. Reusing the request ID with changed content, answering a question twice with a new request ID, or submitting against a stale version returns a conflict.
@@ -59,17 +69,17 @@ These are counts on the app's stated questions and assumptions. They are not a m
 
 The versioned API is mounted at `/api/v1/learning-path`:
 
-| Route                                                              | Use                                                                  |
-| ------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| `GET /`                                                            | Read the public catalog.                                             |
-| `GET /progress`                                                    | Rebuild the progress summary and review suggestion.                  |
-| `POST /instances` / `GET /instances/:instanceId`                   | Start a new version-pinned instance or read its reconstructed state. |
-| `POST /instances/:instanceId/resumed`                              | Record a resume acknowledgement.                                     |
-| `POST /instances/:instanceId/questions/:questionId/presented`      | Record a question-display acknowledgement.                           |
-| `POST /instances/:instanceId/questions/:questionId/answers`        | Submit an answer with an idempotent request ID.                      |
-| `POST /instances/:instanceId/questions/:questionId/feedback-shown` | Acknowledge display of committed feedback.                           |
-| `POST /instances/:instanceId/complete`                             | Complete an instance after all feedback acknowledgements.            |
-| `GET /export`                                                      | Download a cursor-pinned event page.                                 |
-| `DELETE /progress`                                                 | Clear only learning-path events and receipts.                        |
+| Route                                                              | Use                                                                      |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `GET /`                                                            | Read the public catalog.                                                 |
+| `GET /progress?timeZone=<IANA zone>`                               | Rebuild progress, review, and calendar-day consistency (UTC by default). |
+| `POST /instances` / `GET /instances/:instanceId`                   | Start a new version-pinned instance or read its reconstructed state.     |
+| `POST /instances/:instanceId/resumed`                              | Record a resume acknowledgement.                                         |
+| `POST /instances/:instanceId/questions/:questionId/presented`      | Record a question-display acknowledgement.                               |
+| `POST /instances/:instanceId/questions/:questionId/answers`        | Submit an answer with an idempotent request ID.                          |
+| `POST /instances/:instanceId/questions/:questionId/feedback-shown` | Acknowledge display of committed feedback.                               |
+| `POST /instances/:instanceId/complete`                             | Complete an instance after all feedback acknowledgements.                |
+| `GET /export`                                                      | Download a cursor-pinned event page.                                     |
+| `DELETE /progress`                                                 | Clear only learning-path events and receipts.                            |
 
 For executable checks, see [VERIFY.md](../VERIFY.md) and run the focused learning-path API/content and desktop browser suites.

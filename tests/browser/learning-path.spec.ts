@@ -4,6 +4,236 @@ test.beforeEach(async ({ request }) => {
   await request.delete("/api/v1/learning-path/progress");
 });
 
+test("today's practice starts a lesson, resumes it, and keeps completion through reload", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/");
+  const daily = page.getByRole("region", {
+    name: "Today's practice",
+    exact: true,
+  });
+  await expect(daily).toContainText("Not completed today");
+  await expect(daily).toContainText("0-day practice streak");
+  await expect(daily).toContainText("does not measure poker skill");
+  await daily
+    .getByRole("button", { name: "Start today's practice", exact: true })
+    .focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: "No bet to match", exact: true }),
+  ).toBeFocused();
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "No bet to match", exact: true }),
+  ).toBeFocused();
+  await expect(
+    daily.getByRole("button", { name: "Resume today's practice", exact: true }),
+  ).toBeEnabled();
+  await daily
+    .getByRole("button", { name: "Resume today's practice", exact: true })
+    .click();
+  for (const name of [
+    "Check",
+    "Call 10",
+    "30 total",
+    "Deal the three-card flop",
+    "Check",
+  ]) {
+    await page.getByRole("radio", { name, exact: true }).check();
+    await page
+      .getByRole("button", { name: "Submit answer", exact: true })
+      .click();
+    await expect(
+      page.getByRole("region", { name: "Path feedback" }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Continue lesson", exact: true })
+      .click();
+  }
+  await expect(
+    page.getByRole("heading", { name: "Lesson complete", exact: true }),
+  ).toBeVisible();
+  await expect(daily).toContainText("Completed today");
+  await expect(daily).toContainText("1-day practice streak");
+  await page.getByRole("button", { name: "Back to path", exact: true }).click();
+  const progressRead = page.waitForRequest(
+    (req) =>
+      req.method() === "GET" && req.url().includes("/learning-path/progress?"),
+  );
+  await page.reload();
+  const read = await progressRead;
+  const zone = await page.evaluate(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+  );
+  expect(new URL(read.url()).searchParams.get("timeZone")).toBe(zone);
+  await expect(daily).toContainText("Completed today");
+  await expect(daily).toContainText("1-day practice streak");
+  await expect(daily).toContainText("Build the best five-card hand");
+  expect(
+    (await (await request.get("/api/v1/learning-path/progress")).json())
+      .completedLessons,
+  ).toBe(1);
+});
+
+test.describe("daily status freshness", () => {
+  test.use({ timezoneId: "America/New_York" });
+  for (const newerResult of ["failure", "success"] as const) {
+    test(`delayed initial progress remains usable after a newer ${newerResult}`, async ({
+      page,
+    }) => {
+      let releaseInitial!: () => void;
+      const released = new Promise<void>((resolve) => {
+        releaseInitial = resolve;
+      });
+      let holdInitial!: () => void;
+      const held = new Promise<void>((resolve) => {
+        holdInitial = resolve;
+      });
+      let reads = 0;
+      await page.route(
+        /\/api\/v1\/learning-path\/progress\?/,
+        async (route) => {
+          const read = ++reads;
+          if (read === 1) {
+            const response = await route.fetch();
+            const summary = await response.json();
+            holdInitial();
+            await released;
+            await route.fulfill({
+              response,
+              json: { ...summary, completedToday: true, currentStreakDays: 2 },
+            });
+          } else if (newerResult === "failure") {
+            await route.fulfill({
+              status: 503,
+              json: { error: "Temporary focus refresh failure" },
+            });
+          } else {
+            const response = await route.fetch();
+            await route.fulfill({
+              response,
+              json: {
+                ...(await response.json()),
+                completedToday: false,
+                currentStreakDays: 5,
+                answerAttempts: 9,
+              },
+            });
+          }
+        },
+      );
+      await page.goto("/");
+      await held;
+      const focusResponse = page.waitForResponse((response) =>
+        response.url().includes("/learning-path/progress?"),
+      );
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      expect((await focusResponse).status()).toBe(
+        newerResult === "failure" ? 503 : 200,
+      );
+      if (newerResult === "success")
+        await expect(page.getByText(/9 answers attempted/)).toBeVisible();
+      releaseInitial();
+      const daily = page.getByRole("region", {
+        name: "Today's practice",
+        exact: true,
+      });
+      await expect(daily).toBeVisible();
+      await expect(daily).toContainText(
+        newerResult === "failure" ? "Completed today" : "Not completed today",
+      );
+      await expect(daily).toContainText(
+        newerResult === "failure"
+          ? "2-day practice streak"
+          : "5-day practice streak",
+      );
+      await expect(
+        page.getByRole("button", {
+          name: "Start Table flow and legal actions",
+          exact: true,
+        }),
+      ).toBeEnabled();
+      if (newerResult === "success")
+        await expect(page.getByText(/9 answers attempted/)).toBeVisible();
+    });
+  }
+  test("refreshes at local midnight across DST and on return to the tab", async ({
+    page,
+  }) => {
+    await page.clock.install({ time: new Date("2026-10-31T23:59:50-04:00") });
+    await page.clock.pauseAt(new Date("2026-10-31T23:59:50-04:00"));
+    let dailyState = { completedToday: true, currentStreakDays: 3 };
+    let failRefresh = false;
+    const progressReads: string[] = [];
+    await page.route(/\/api\/v1\/learning-path\/progress\?/, async (route) => {
+      progressReads.push(route.request().url());
+      if (failRefresh) {
+        await route.fulfill({
+          status: 503,
+          json: { error: "Temporary status failure" },
+        });
+        return;
+      }
+      const response = await route.fetch();
+      await route.fulfill({
+        response,
+        json: { ...(await response.json()), ...dailyState },
+      });
+    });
+    await page.goto("/");
+    const daily = page.getByRole("region", {
+      name: "Today's practice",
+      exact: true,
+    });
+    await expect(daily).toContainText("Completed today");
+    await expect(daily).toContainText("3-day practice streak");
+    const start = page.getByRole("button", {
+      name: "Start Table flow and legal actions",
+      exact: true,
+    });
+    await start.focus();
+    dailyState = { completedToday: false, currentStreakDays: 3 };
+    await page.clock.runFor(10_000);
+    await expect(daily).toContainText("Not completed today");
+    await expect(daily).toContainText("3-day practice streak");
+    await expect(start).toBeFocused();
+    // November 1 has 25 local hours. A fixed 24-hour timer fires too early.
+    const afterMidnight = progressReads.length;
+    dailyState = { completedToday: false, currentStreakDays: 0 };
+    await page.clock.fastForward(24 * 60 * 60 * 1000);
+    expect(progressReads).toHaveLength(afterMidnight);
+    await page.clock.runFor(60 * 60 * 1000);
+    await expect(daily).toContainText("0-day practice streak");
+    dailyState = { completedToday: true, currentStreakDays: 1 };
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(daily).toContainText("Completed today");
+    await expect(daily).toContainText("1-day practice streak");
+    dailyState = { completedToday: false, currentStreakDays: 1 };
+    await page.evaluate(() =>
+      document.dispatchEvent(new Event("visibilitychange")),
+    );
+    await expect(daily).toContainText("Not completed today");
+    await expect(start).toBeFocused();
+    failRefresh = true;
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(daily.getByRole("alert")).toContainText("may be out of date");
+    failRefresh = false;
+    dailyState = { completedToday: true, currentStreakDays: 1 };
+    await daily
+      .getByRole("button", { name: "Refresh daily status", exact: true })
+      .click();
+    await expect(daily.getByRole("alert")).toHaveCount(0);
+    await expect(daily).toContainText("Completed today");
+    expect(
+      progressReads.every(
+        (url) =>
+          new URL(url).searchParams.get("timeZone") === "America/New_York",
+      ),
+    ).toBe(true);
+  });
+});
+
 test("course home preserves completed lessons and recommends the next unfinished lesson after repeats and reload", async ({
   page,
   request,
@@ -468,19 +698,22 @@ for (const failedStep of ["delete", "refresh"]) {
       page.getByRole("button", { name: "Start Table flow and legal actions" }),
     ).toBeEnabled();
     let failed = false;
-    await page.route("**/api/v1/learning-path/progress", async (route) => {
-      if (
-        !failed &&
-        route.request().method() ===
-          (failedStep === "delete" ? "DELETE" : "GET")
-      ) {
-        failed = true;
-        await route.fulfill({
-          status: 503,
-          json: { error: "Clear operation temporarily unavailable" },
-        });
-      } else await route.continue();
-    });
+    await page.route(
+      /\/api\/v1\/learning-path\/progress(?:\?.*)?$/,
+      async (route) => {
+        if (
+          !failed &&
+          route.request().method() ===
+            (failedStep === "delete" ? "DELETE" : "GET")
+        ) {
+          failed = true;
+          await route.fulfill({
+            status: 503,
+            json: { error: "Clear operation temporarily unavailable" },
+          });
+        } else await route.continue();
+      },
+    );
     const clear = page.getByRole("button", {
       name: "Clear path progress",
       exact: true,

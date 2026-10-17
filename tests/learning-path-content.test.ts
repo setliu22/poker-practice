@@ -460,6 +460,8 @@ describe("versioned learning path contract and content", () => {
     const progress = {
       startedLessons: 1,
       completedLessons: 0,
+      completedToday: false,
+      currentStreakDays: 0,
       completedContentIds: [],
       nextLessonContentId: "table-flow",
       resumedLessons: 0,
@@ -472,6 +474,10 @@ describe("versioned learning path contract and content", () => {
     };
     expect(learningPathProgressSchema.parse(progress)).toEqual(progress);
     for (const fields of [
+      { completedToday: "yes" },
+      { currentStreakDays: -1 },
+      { currentStreakDays: 1.5 },
+      { currentStreakDays: "1" },
       { completedContentIds: [""] },
       { completedContentIds: "table-flow" },
       { nextLessonContentId: "" },
