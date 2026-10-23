@@ -7,6 +7,10 @@ import type {
 async function openLab(page: Page) {
   await page.goto("/");
   await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Practice", exact: true })
+    .click();
+  await page
     .getByRole("button", { name: "Open online cash Decision Lab" })
     .click();
   await expect(

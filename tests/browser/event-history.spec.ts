@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 async function startAndFold(page: Page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByRole("button", { name: "Start table", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Fold", exact: true }),

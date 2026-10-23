@@ -1,5 +1,8 @@
-import { Learn, LearningProgressSummary } from "./Learn";
-import { CashProgressSummary } from "./CashPractice";
+import { Learn, EarlierLearn, LearningProgressSummary } from "./Learn";
+import { LearningPathProgressSummary } from "./LearningPath";
+import { LearningPathDataControls } from "./LearningPathDataControls";
+import { PreflopWalkthrough } from "./PreflopWalkthrough";
+import { CashPractice, CashProgressSummary } from "./CashPractice";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -35,16 +38,38 @@ const descriptions: Record<Mode, string> = {
   equity: "Estimate your share of the pot.",
   decision: "Choose your next move.",
 };
+const destinations = [
+  "Learn",
+  "Practice",
+  "Play",
+  "Progress",
+  "Reference",
+] as const;
+type Destination = (typeof destinations)[number];
+const navigationPaths: Record<Destination, string> = {
+  Learn:
+    "M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3",
+  Practice: "M21 12a9 9 0 1 1-9-9 M16 12a4 4 0 1 1-4-4 M12 12l9-9 M17 3h4v4",
+  Play: "M7 7V4h13v14h-3 M4 7h13v14H4z M8 13l2.5-3 2.5 3-2.5 3z",
+  Progress: "M4 20h17 M7 16v-5 M12 16V7 M17 16V3",
+  Reference: "M5 3h14v18H5z M9 7h6 M9 11h6 M9 15h3",
+};
 function App() {
-  const [page, setPage] = useState<
-    "Learn" | "Practice" | "Bot table" | "Progress" | "Reference"
-  >("Learn");
+  const [page, setPage] = useState<Destination>(() => {
+    try {
+      return localStorage.getItem("poker-practice-learning-view") === "cash"
+        ? "Practice"
+        : "Learn";
+    } catch {
+      return "Learn";
+    }
+  });
   return (
-    <>
+    <div className="app-shell">
       <a className="skip" href="#main">
         Skip to content
       </a>
-      <header>
+      <header className="app-sidebar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
             ♠
@@ -52,23 +77,35 @@ function App() {
           <span>Poker Practice</span>
         </div>
         <nav aria-label="Main navigation">
-          {(
-            ["Learn", "Practice", "Bot table", "Progress", "Reference"] as const
-          ).map((p) => (
+          {destinations.map((p) => (
             <button
               key={p}
               aria-current={page === p ? "page" : undefined}
-              onClick={() => setPage(p)}
+              onClick={() => {
+                setPage(p);
+                window.scrollTo(0, 0);
+              }}
             >
-              {p}
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d={navigationPaths[p]} />
+              </svg>
+              <span>{p}</span>
             </button>
           ))}
         </nav>
       </header>
-      <main id="main">
+      <main id="main" className="app-main" data-page={page.toLowerCase()}>
         {page === "Learn" ? (
           <Learn />
-        ) : page === "Bot table" ? (
+        ) : page === "Play" ? (
           <BotPractice />
         ) : page === "Practice" ? (
           <Practice />
@@ -78,13 +115,60 @@ function App() {
           <Reference />
         )}
       </main>
-      <footer>
-        <span>No-limit Texas Hold’em · Stored on this device</span>
-      </footer>
-    </>
+    </div>
   );
 }
 function Practice() {
+  const [cash, setCash] = useState(() => {
+    try {
+      return localStorage.getItem("poker-practice-learning-view") === "cash";
+    } catch {
+      return false;
+    }
+  });
+  const cashTrigger = useRef<HTMLButtonElement>(null);
+  const returning = useRef(false);
+  useEffect(() => {
+    if (!cash && returning.current) {
+      cashTrigger.current?.focus();
+      returning.current = false;
+    }
+  }, [cash]);
+  if (cash)
+    return (
+      <CashPractice
+        onBack={() => {
+          try {
+            localStorage.removeItem("poker-practice-learning-view");
+          } catch {
+            /* Browser storage is optional. */
+          }
+          returning.current = true;
+          setCash(false);
+        }}
+      />
+    );
+  return (
+    <PracticeExercises
+      cashTrigger={cashTrigger}
+      onOpenCash={() => {
+        try {
+          localStorage.setItem("poker-practice-learning-view", "cash");
+        } catch {
+          /* Browser storage is optional. */
+        }
+        setCash(true);
+      }}
+    />
+  );
+}
+function PracticeExercises({
+  onOpenCash,
+  cashTrigger,
+}: {
+  onOpenCash: () => void;
+  cashTrigger: React.RefObject<HTMLButtonElement | null>;
+}) {
   const [mode, setMode] = useState<Mode>("who-wins"),
     [street, setStreet] = useState<"river" | "turn">("river"),
     [showdownStyle, setShowdownStyle] = useState<"random" | "balanced">(() =>
@@ -212,6 +296,21 @@ function Practice() {
           ↗ Practice my weak areas
         </button>
       </div>
+      <section className="panel cash-entry">
+        <div>
+          <span className="eyebrow">Online cash · 2–9 seats</span>
+          <h2>Online cash Decision Lab</h2>
+          <p>Practice a river decision, then see why.</p>
+        </div>
+        <button
+          ref={cashTrigger}
+          className="secondary"
+          onClick={onOpenCash}
+          aria-label="Open online cash Decision Lab"
+        >
+          Open Decision Lab <span aria-hidden="true">↗</span>
+        </button>
+      </section>
       <div className="practice-layout">
         <aside className="mode-panel">
           <p className="eyebrow">PRACTICE MODES</p>
@@ -473,9 +572,6 @@ function Practice() {
                           ? "Checking…"
                           : "Check my answer"}
                       </button>
-                      <span className="quiet">
-                        Feedback appears after you answer.
-                      </span>
                     </div>
                   )}
                 </form>
@@ -705,7 +801,10 @@ function Progress() {
         <p role="status">Loading progress…</p>
       ) : (
         <>
-          <CashProgressSummary refresh={data} />
+          <div className="progress-overview">
+            <LearningPathProgressSummary refresh={data} />
+            <CashProgressSummary refresh={data} />
+          </div>
           <section className="progress-summary">
             <div>
               <p className="eyebrow">EXERCISES COMPLETED</p>
@@ -828,8 +927,16 @@ function Progress() {
               </div>
             </section>
           </details>
+          <details className="panel learning-data-section">
+            <summary>Learning path data</summary>
+            <LearningPathDataControls
+              onChange={async () => {
+                const next = await api<ProgressData>("/progress");
+                setData(next);
+              }}
+            />
+          </details>
           <div className="clear-row">
-            <p>Saved on this device.</p>
             <button
               className="secondary"
               onClick={() => dialog.current?.showModal()}
@@ -929,6 +1036,35 @@ const referenceSummaries: Record<string, string> = {
 };
 function Reference() {
   const [query, setQuery] = useState("");
+  const [tool, setTool] = useState<"legacy" | "preflop" | null>(null);
+  const legacyTrigger = useRef<HTMLButtonElement>(null);
+  const preflopTrigger = useRef<HTMLButtonElement>(null);
+  const toolReturn = useRef<"legacy" | "preflop" | null>(null);
+  useEffect(() => {
+    if (!tool && toolReturn.current) {
+      (toolReturn.current === "legacy"
+        ? legacyTrigger
+        : preflopTrigger
+      ).current?.focus();
+      toolReturn.current = null;
+    }
+  }, [tool]);
+  if (tool)
+    return (
+      <>
+        <button
+          className="secondary reference-back"
+          onClick={() => setTool(null)}
+        >
+          Back to reference
+        </button>
+        {tool === "legacy" ? (
+          <EarlierLearn />
+        ) : (
+          <PreflopWalkthrough onLibrary={() => setTool("legacy")} />
+        )}
+      </>
+    );
   const items = reference.filter((r) =>
     r.join(" ").toLowerCase().includes(query.toLowerCase()),
   );
@@ -939,6 +1075,41 @@ function Reference() {
           <h1>Reference</h1>
         </div>
       </div>
+      <section
+        className="panel reference-tools"
+        aria-label="Guided reference tools"
+      >
+        <div>
+          <h2>Guided reference tools</h2>
+          <p className="quiet">
+            Explore an example or revisit earlier lessons.
+          </p>
+        </div>
+        <div className="button-row">
+          <button
+            ref={preflopTrigger}
+            className="secondary"
+            aria-label="Open preflop walkthrough"
+            onClick={() => {
+              toolReturn.current = "preflop";
+              setTool("preflop");
+            }}
+          >
+            Preflop walkthrough
+          </button>
+          <button
+            ref={legacyTrigger}
+            className="secondary"
+            aria-label="Open legacy lessons"
+            onClick={() => {
+              toolReturn.current = "legacy";
+              setTool("legacy");
+            }}
+          >
+            Earlier lessons
+          </button>
+        </div>
+      </section>
       <div className="search">
         <label htmlFor="search">Find a concept</label>
         <input

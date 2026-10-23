@@ -1,10 +1,29 @@
 import { test, expect, type Page } from "@playwright/test";
+test("empty simulator responses show a readable recovery message", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await page.getByRole("button", { name: "Start table", exact: true }).click();
+  await page.route("**/api/tables/*/actions", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: "" }),
+  );
+  await page.getByRole("button", { name: "Fold", exact: true }).click();
+
+  await expect(page.getByRole("alert")).toHaveText(
+    "The simulator returned an incomplete response. Reload the table before continuing.",
+  );
+  await expect(
+    page.getByRole("button", { name: "Fold", exact: true }),
+  ).toBeEnabled();
+});
+
 test("live odds are optional, read-only and usable by keyboard on desktop and mobile", async ({
   page,
   request,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByRole("button", { name: "Start table", exact: true }).click();
   const button = page.getByRole("button", {
     name: "Check My Odds",
@@ -112,7 +131,7 @@ test("odds loading does not block play and a stale response cannot appear after 
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByRole("button", { name: "Start table", exact: true }).click();
   let release!: () => void;
   let captured!: () => void;
@@ -159,7 +178,7 @@ test("odds errors are readable and can be retried without changing the hand", as
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByRole("button", { name: "Start table", exact: true }).click();
   await page.route("**/api/tables/*/odds", (route) =>
     route.fulfill({
@@ -260,7 +279,7 @@ for (const players of [2, 3, 4, 5, 6, 7, 8, 9]) {
     page,
   }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Bot table", exact: true }).click();
+    await page.getByRole("button", { name: "Play", exact: true }).click();
     await page
       .getByLabel("Players, including you")
       .selectOption(String(players));
@@ -272,98 +291,105 @@ for (const players of [2, 3, 4, 5, 6, 7, 8, 9]) {
 }
 
 for (const players of [2, 3, 4, 5, 6, 7, 8, 9]) {
-  test(`${players}-player river board stays clear of the seats on a 320px screen`, async ({
-    page,
-  }) => {
+  test(
+    `${players}-player river board stays clear of the seats on a 320px screen`,
+    { tag: "@mobile" },
+    async ({ page }) => {
+      await page.setViewportSize({ width: 320, height: 800 });
+      // Only the public view is substituted: this test exercises the dense layout,
+      // not gameplay or equity. All visible cards remain distinct.
+      await page.route("**/api/tables", async (route) => {
+        if (route.request().method() !== "POST") return route.continue();
+        const response = await route.fetch();
+        const view = await response.json();
+        const ownCards: string[] = view.players[0].hole;
+        const candidates = ["As", "Kh", "Qd", "Jc", "Ts", "9h", "8d"];
+        view.board = candidates
+          .filter((card) => !ownCards.includes(card))
+          .slice(0, 5);
+        view.street = "river";
+        await route.fulfill({ response, json: view });
+      });
+      await page.goto("/");
+      await page.getByRole("button", { name: "Play", exact: true }).click();
+      await page
+        .getByLabel("Players, including you")
+        .selectOption(String(players));
+      await page
+        .getByRole("button", { name: "Start table", exact: true })
+        .click();
+      await expect(page.locator(".bot-board .card")).toHaveCount(5);
+      await expectCircularTable(page, players);
+    },
+  );
+}
+
+test(
+  "completed nine-player table keeps revealed hands and split payouts separated on mobile",
+  { tag: "@mobile" },
+  async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 800 });
-    // Only the public view is substituted: this test exercises the dense layout,
-    // not gameplay or equity. All visible cards remain distinct.
     await page.route("**/api/tables", async (route) => {
       if (route.request().method() !== "POST") return route.continue();
       const response = await route.fetch();
       const view = await response.json();
       const ownCards: string[] = view.players[0].hole;
-      const candidates = ["As", "Kh", "Qd", "Jc", "Ts", "9h", "8d"];
-      view.board = candidates
-        .filter((card) => !ownCards.includes(card))
-        .slice(0, 5);
+      const suit = ["s", "h", "d", "c"].find(
+        (suit) => !ownCards.some((card) => card.endsWith(suit)),
+      )!;
+      const board = ["A", "K", "Q", "J", "T"].map((rank) => rank + suit);
+      const remainingCards = ["s", "h", "d", "c"].flatMap((suit) =>
+        ["2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A"]
+          .map((rank) => rank + suit)
+          .filter((card) => !board.includes(card) && !ownCards.includes(card)),
+      );
+      // A public completed-hand fixture: everyone plays the royal-flush board
+      // and receives an equal payout. This tests the tallest seat content.
+      view.board = board;
       view.street = "river";
+      view.complete = true;
+      view.actor = null;
+      view.legal = null;
+      view.pot = 900;
+      view.rounds = [];
+      view.review = [];
+      for (const player of view.players) {
+        player.hole =
+          player.seat === 0 ? ownCards : remainingCards.splice(0, 2);
+        player.folded = false;
+        player.allIn = false;
+        player.stack = 1000;
+        player.contributed = 100;
+        player.streetBet = 0;
+        player.payout = 100;
+        player.handName = "Straight flush";
+        player.bestFive = board;
+      }
       await route.fulfill({ response, json: view });
     });
     await page.goto("/");
-    await page.getByRole("button", { name: "Bot table", exact: true }).click();
-    await page
-      .getByLabel("Players, including you")
-      .selectOption(String(players));
+    await page.getByRole("button", { name: "Play", exact: true }).click();
+    await page.getByLabel("Players, including you").selectOption("9");
     await page
       .getByRole("button", { name: "Start table", exact: true })
       .click();
-    await expect(page.locator(".bot-board .card")).toHaveCount(5);
-    await expectCircularTable(page, players);
-  });
-}
-
-test("completed nine-player table keeps revealed hands and split payouts separated on mobile", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 320, height: 800 });
-  await page.route("**/api/tables", async (route) => {
-    if (route.request().method() !== "POST") return route.continue();
-    const response = await route.fetch();
-    const view = await response.json();
-    const ownCards: string[] = view.players[0].hole;
-    const suit = ["s", "h", "d", "c"].find(
-      (suit) => !ownCards.some((card) => card.endsWith(suit)),
-    )!;
-    const board = ["A", "K", "Q", "J", "T"].map((rank) => rank + suit);
-    const remainingCards = ["s", "h", "d", "c"].flatMap((suit) =>
-      ["2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A"]
-        .map((rank) => rank + suit)
-        .filter((card) => !board.includes(card) && !ownCards.includes(card)),
-    );
-    // A public completed-hand fixture: everyone plays the royal-flush board
-    // and receives an equal payout. This tests the tallest seat content.
-    view.board = board;
-    view.street = "river";
-    view.complete = true;
-    view.actor = null;
-    view.legal = null;
-    view.pot = 900;
-    view.rounds = [];
-    view.review = [];
-    for (const player of view.players) {
-      player.hole = player.seat === 0 ? ownCards : remainingCards.splice(0, 2);
-      player.folded = false;
-      player.allIn = false;
-      player.stack = 1000;
-      player.contributed = 100;
-      player.streetBet = 0;
-      player.payout = 100;
-      player.handName = "Straight flush";
-      player.bestFive = board;
-    }
-    await route.fulfill({ response, json: view });
-  });
-  await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
-  await page.getByLabel("Players, including you").selectOption("9");
-  await page.getByRole("button", { name: "Start table", exact: true }).click();
-  await expect(page.locator(".bot-seat .card")).toHaveCount(18);
-  await expect(page.locator(".hero-seat .payout")).toBeVisible();
-  await expect(
-    page
-      .locator(".bot-seat:not(.hero-seat) .seat-status")
-      .filter({ hasText: /^Net / }),
-  ).toHaveCount(8);
-  await expectCircularTable(page, 9);
-});
+    await expect(page.locator(".bot-seat .card")).toHaveCount(18);
+    await expect(page.locator(".hero-seat .payout")).toBeVisible();
+    await expect(
+      page
+        .locator(".bot-seat:not(.hero-seat) .seat-status")
+        .filter({ hasText: /^Net / }),
+    ).toHaveCount(8);
+    await expectCircularTable(page, 9);
+  },
+);
 
 test("replay starts the same deal in a separate game without changing the original", async ({
   page,
   request,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByRole("button", { name: "Start table", exact: true }).click();
   await expect(page.getByRole("region", { name: "Poker table" })).toBeVisible();
   const sourceId = await page.evaluate(() =>
@@ -447,7 +473,7 @@ test("select a multiway table, play a hand, read feedback, and resume it", async
 }) => {
   test.setTimeout(90000);
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByLabel("Players, including you").selectOption("6");
   await page.getByRole("button", { name: "Start table", exact: true }).click();
   await expect(page.getByRole("region", { name: "Poker table" })).toBeVisible();
@@ -512,7 +538,7 @@ test("select a multiway table, play a hand, read feedback, and resume it", async
     fullPage: true,
   });
   await page.reload();
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect(
     page.getByRole("region", { name: "Hand feedback" }),
   ).toBeVisible();
@@ -524,7 +550,7 @@ test("heads-up controls work by keyboard and table size can change between hands
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByRole("button", { name: "Start table", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(page.locator(".bot-seat")).toHaveCount(2);
@@ -547,7 +573,7 @@ test("named opponents have optional playstyle dialogs with keyboard dismissal an
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByLabel("Players, including you").selectOption("9");
   await page.getByRole("button", { name: "Start table", exact: true }).click();
   await expect(page.getByRole("button", { name: /playstyle$/ })).toHaveCount(8);
@@ -596,7 +622,7 @@ test("saved games retain profit, show charts and can be reopened", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByRole("button", { name: "Start table", exact: true }).click();
   const name = await page.locator(".active-game-strip strong").innerText();
   await page.getByRole("button", { name: "Fold", exact: true }).click();
@@ -649,7 +675,7 @@ test("saved games retain profit, show charts and can be reopened", async ({
     page.getByRole("heading", { name: "Hand complete", exact: true }),
   ).toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect(page.getByRole("region", { name: "Poker table" })).toBeVisible();
   await page.getByRole("button", { name: "View stats", exact: true }).click();
   await expect(
@@ -671,7 +697,7 @@ test("game deletion supports cancel, retry, deleting another game and deleting t
   request,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByRole("button", { name: "Start table", exact: true }).click();
   await expect(page.locator(".active-game-strip strong")).toBeVisible();
   const first = await page.evaluate(() =>
@@ -754,7 +780,7 @@ test("game deletion supports cancel, retry, deleting another game and deleting t
   ).toBeNull();
   expect((await request.get(`/api/tables/${second}`)).status()).toBe(404);
   await page.reload();
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Start table", exact: true }),
   ).toBeVisible();

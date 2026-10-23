@@ -1,9 +1,7 @@
 import { LearningPath } from "./LearningPath";
-import { PreflopWalkthrough } from "./PreflopWalkthrough";
 import { ReadLesson, ReadProgressSummary } from "./ReadLesson";
 import { useEffect, useRef, useState } from "react";
 import { Cards } from "./Cards";
-import { CashPractice } from "./CashPractice";
 import type {
   LearningQuestion,
   LearningFeedback,
@@ -24,7 +22,7 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
   if (!r.ok) throw new Error(data.error ?? "Unable to load the lesson.");
   return data;
 }
-function EarlierLearn() {
+export function EarlierLearn() {
   const [reading, setReading] = useState(false);
   const [screen, setScreen] = useState<"lesson" | "exercise" | "complete">(
       "lesson",
@@ -441,7 +439,7 @@ export function LearningProgressSummary({ refresh }: { refresh: unknown }) {
     return (
       <>
         <p className="quiet">
-          Legacy learning summaries · incomplete history. Separate from beginner
+          Legacy learning summaries · incomplete history. Separate from strategy
           path progress.
         </p>
         <ReadProgressSummary refresh={refresh} />
@@ -457,7 +455,7 @@ export function LearningProgressSummary({ refresh }: { refresh: unknown }) {
       </p>
       <p className="quiet">
         Incomplete history for these supplied lesson situations; separate from
-        beginner path progress.
+        strategy path progress.
       </p>
       <details>
         <summary>Learning details</summary>
@@ -483,62 +481,5 @@ export function LearningProgressSummary({ refresh }: { refresh: unknown }) {
 }
 
 export function Learn() {
-  const [earlier, setEarlier] = useState(false);
-  const [cash, setCash] = useState(() => {
-    try {
-      return localStorage.getItem("poker-practice-learning-view") === "cash";
-    } catch {
-      return false;
-    }
-  });
-  if (cash)
-    return (
-      <CashPractice
-        onBack={() => {
-          try {
-            localStorage.removeItem("poker-practice-learning-view");
-          } catch {
-            /* Browser storage is optional. */
-          }
-          setCash(false);
-        }}
-      />
-    );
-  if (earlier)
-    return (
-      <>
-        <button className="secondary" onClick={() => setEarlier(false)}>
-          Back to beginner path
-        </button>
-        <EarlierLearn />
-      </>
-    );
-  return (
-    <>
-      <LearningPath />
-      <p className="quiet">
-        Legacy lessons · incomplete history. Earlier summaries are separate from
-        beginner path progress.
-      </p>
-      <section className="panel cash-entry">
-        <span className="eyebrow">Online cash · 2–9 seats</span>
-        <h2>Online cash Decision Lab</h2>
-        <p>Practice a river decision, then see why.</p>
-        <button
-          className="primary"
-          onClick={() => {
-            try {
-              localStorage.setItem("poker-practice-learning-view", "cash");
-            } catch {
-              /* Browser storage is optional. */
-            }
-            setCash(true);
-          }}
-        >
-          Open online cash Decision Lab
-        </button>
-      </section>
-      <PreflopWalkthrough onLibrary={() => setEarlier(true)} />
-    </>
-  );
+  return <LearningPath />;
 }

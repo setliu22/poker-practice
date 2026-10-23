@@ -677,7 +677,7 @@ export function CashPractice({ onBack }: { onBack: () => void }) {
   return (
     <div className="learning-layout cash-practice">
       <button className="secondary" disabled={busy} onClick={onBack}>
-        Back to learning
+        Back to practice
       </button>
       <div className="page-heading">
         <div>

@@ -11,7 +11,7 @@ test("live opening guide is read-only, highlights your hand, and supports keyboa
     height: 850,
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByRole("button", { name: "Start table", exact: true }).click();
   const button = page.getByRole("button", {
     name: "Preflop guide",
@@ -107,7 +107,7 @@ test("live opening guide is read-only, highlights your hand, and supports keyboa
   await expect(
     page.getByRole("heading", { name: "Hand complete", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button",{name:/^Review decisions/}).click();
+  await page.getByRole("button", { name: /^Review decisions/ }).click();
   await page.locator(".bot-estimate-details > summary").click();
   const review = page.getByRole("region", {
     name: "Illustrative opening guide",
@@ -122,8 +122,8 @@ test("live opening guide is read-only, highlights your hand, and supports keyboa
     ),
   ).toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
-  await page.getByRole("button",{name:/^Review decisions/}).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await page.getByRole("button", { name: /^Review decisions/ }).click();
   await page.locator(".bot-estimate-details > summary").click();
   await expect(
     page.getByRole("region", { name: "Illustrative opening guide" }),
@@ -134,7 +134,7 @@ test("guide loading can be cancelled, stale responses stay hidden, and errors ca
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByRole("button", { name: "Start table", exact: true }).click();
   let release!: () => void;
   let received!: () => void;
@@ -218,19 +218,27 @@ test("a raised pot has no opening chart and retains its actual betting situation
     view!.id,
   );
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page
     .getByRole("button", { name: "Preflop guide", exact: true })
     .click();
   const dialog = page.getByRole("dialog", { name: "Preflop guide" });
   await expect(
-    dialog.getByRole("heading", { name: "This situation needs different guidance" }),
+    dialog.getByRole("heading", {
+      name: "This situation needs different guidance",
+    }),
   ).toBeVisible();
   await expect(dialog.getByText(/someone has already raised/)).toBeVisible();
   await expect(dialog.getByRole("grid")).toHaveCount(0);
-  await dialog.getByRole("button",{name:"Think through this decision",exact:true}).click();
-  await expect(page.getByRole("dialog",{name:"Decision assistant",exact:true})).toBeVisible();
-  await expect(page.getByRole("region",{name:"How to make this decision"})).toBeVisible();
+  await dialog
+    .getByRole("button", { name: "Think through this decision", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Decision assistant", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "How to make this decision" }),
+  ).toBeVisible();
   await page.keyboard.press("Escape");
   const after = await (await request.get(`/api/tables/${view!.id}`)).json();
   expect(after.currentBet).toBe(view!.currentBet);

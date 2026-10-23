@@ -198,7 +198,7 @@ export function PreflopWalkthrough({ onLibrary }: { onLibrary: () => void }) {
     <div className="learning-layout preflop-walkthrough">
       <div className="page-heading">
         <div>
-          <span className="eyebrow">Learn · A guided preflop hand</span>
+          <span className="eyebrow">Reference · A guided preflop hand</span>
           <h1 ref={heading} tabIndex={-1}>
             {titles[step]}
           </h1>

@@ -167,7 +167,7 @@ test("range tables explain blockers and weights, support keyboard navigation, an
     await route.fulfill({ status: 201, json: view });
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByRole("button", { name: "Start table", exact: true }).click();
   await page.getByRole("button", { name: /^Review decisions/ }).click();
   const facts = page.getByRole("region", { name: "Decision facts" });

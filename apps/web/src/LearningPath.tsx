@@ -6,7 +6,6 @@ import type {
   LearningPathFeedback,
   LearningPathInstanceState,
   LearningPathProgress,
-  LearningPathEvent,
   StartLearningInstance,
 } from "../../../packages/shared/src/learning-path";
 
@@ -65,6 +64,89 @@ function progressPath() {
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   return `/progress?timeZone=${encodeURIComponent(timeZone)}`;
 }
+export function LearningPathProgressSummary({ refresh }: { refresh: unknown }) {
+  const [progress, setProgress] = useState<LearningPathProgress | null>(null);
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let active = true;
+    void api<LearningPathProgress>(progressPath())
+      .then((summary) => {
+        if (active) {
+          setProgress(summary);
+          setError("");
+        }
+      })
+      .catch((e: Error) => {
+        if (active) setError(e.message);
+      });
+    return () => {
+      active = false;
+    };
+  }, [refresh, retry]);
+  return (
+    <section
+      className="panel path-progress"
+      aria-label="Learning path progress"
+    >
+      <span className="eyebrow">Strategy practice</span>
+      <h2>Learning path progress</h2>
+      {error ? (
+        <div role="alert">
+          {error}{" "}
+          <button
+            className="secondary"
+            onClick={() => setRetry((value) => value + 1)}
+          >
+            Retry path progress
+          </button>
+        </div>
+      ) : !progress ? (
+        <p role="status">Loading path progress…</p>
+      ) : (
+        <>
+          <p>
+            {progress.completedLessons} lessons completed ·{" "}
+            {progress.answerAttempts} answers attempted ·{" "}
+            {Object.values(progress.bySkill).reduce(
+              (sum, skill) => sum + skill.incorrect,
+              0,
+            )}{" "}
+            mistakes to learn from
+          </p>
+          <div role="region" aria-label="Fresh transfer results">
+            <h3>Fresh transfer results</h3>
+            <p>
+              {progress.transferCorrect}/{progress.transferAttempts} correct on
+              first presentations.
+            </p>
+            <p className="quiet">Reused variants count as practice only.</p>
+          </div>
+          <details>
+            <summary>Lesson and answer details</summary>
+            <p className="quiet">
+              These counts are practice history, not a mastery or speed score.
+            </p>
+            <p>
+              {progress.completedContentIds.length} distinct lessons completed ·{" "}
+              {progress.startedLessons} lessons started ·{" "}
+              {progress.resumedLessons} lessons resumed
+            </p>
+            <ul>
+              {Object.entries(progress.bySkill).map(([skill, result]) => (
+                <li key={skill}>
+                  {skill.replaceAll("-", " ")}: {result.incorrect} incorrect /{" "}
+                  {result.attempts} answers
+                </li>
+              ))}
+            </ul>
+          </details>
+        </>
+      )}
+    </section>
+  );
+}
+
 export function LearningPath() {
   const saved = useRef<Checkpoint>(checkpoint());
   const [catalog, setCatalog] = useState<LearningPathCatalog | null>(null);
@@ -79,21 +161,14 @@ export function LearningPath() {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [stale, setStale] = useState(false);
-  const [confirm, setConfirm] = useState(false);
-  const [dataError, setDataError] = useState("");
   const [dailyError, setDailyError] = useState("");
   const progressRead = useRef(0);
   const progressSuccess = useRef(0);
   const dailyRetry = useRef<() => Promise<void>>(async () => {});
-  const [clearError, setClearError] = useState("");
   const courseHeading = useRef<HTMLHeadingElement>(null);
-  const dataRetry = useRef<() => Promise<void>>(async () => {});
-  const clearRetry = useRef<() => Promise<void>>(async () => {});
   const feedbackHeading = useRef<HTMLHeadingElement>(null);
-  const returnDialogFocus = useRef(false);
-  const heading = useRef<HTMLHeadingElement>(null),
-    trigger = useRef<HTMLButtonElement>(null),
-    dialog = useRef<HTMLDialogElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const [paused, setPaused] = useState(false);
   const retry = useRef<() => Promise<void>>(async () => {}),
     lock = useRef(false);
   function persist() {
@@ -106,30 +181,18 @@ export function LearningPath() {
     }
     return saved.current.acks[name];
   }
-  async function run(
-    operation: () => Promise<void>,
-    channel: "lesson" | "data" | "clear" = "lesson",
-  ) {
+  async function run(operation: () => Promise<void>) {
     if (lock.current) return;
     lock.current = true;
     setBusy(true);
-    const setOperationError =
-      channel === "data"
-        ? setDataError
-        : channel === "clear"
-          ? setClearError
-          : setError;
-    const operationRetry =
-      channel === "data" ? dataRetry : channel === "clear" ? clearRetry : retry;
-    setOperationError("");
-    if (channel === "lesson") setStale(false);
-    operationRetry.current = operation;
+    setError("");
+    setStale(false);
+    retry.current = operation;
     try {
       await operation();
     } catch (e) {
-      setOperationError((e as Error).message);
-      if (channel === "lesson")
-        setStale(e instanceof PathError && e.status === 409);
+      setError((e as Error).message);
+      setStale(e instanceof PathError && e.status === 409);
     } finally {
       lock.current = false;
       setBusy(false);
@@ -151,6 +214,7 @@ export function LearningPath() {
     await readProgress();
   }
   function display(state: LearningPathInstanceState) {
+    setPaused(false);
     setInstance(state);
     setReady(false);
     setFeedbackReady(false);
@@ -253,7 +317,7 @@ export function LearningPath() {
     };
   }, []);
   useEffect(() => {
-    (instance
+    (!paused && instance
       ? feedback
         ? feedbackHeading
         : heading
@@ -264,19 +328,8 @@ export function LearningPath() {
     instance?.question?.id,
     instance?.complete,
     feedback,
+    paused,
   ]);
-  useEffect(() => {
-    if (confirm) {
-      dialog.current?.showModal();
-      dialog.current?.querySelector("button")?.focus();
-    }
-  }, [confirm]);
-  useEffect(() => {
-    if (returnDialogFocus.current && !confirm && !busy) {
-      trigger.current?.focus();
-      returnDialogFocus.current = false;
-    }
-  }, [confirm, busy]);
   const question = instance?.question;
   // These effects run after the corresponding question/feedback has rendered.
   useEffect(() => {
@@ -300,7 +353,10 @@ export function LearningPath() {
       await refresh();
     });
   }, [feedback]);
-  async function start(contentId: string) {
+  async function start(
+    contentId: string,
+    entryPoint: NonNullable<StartLearningInstance["entryPoint"]>,
+  ) {
     if (!catalog) return;
     saved.current.start = {
       eventId: crypto.randomUUID(),
@@ -308,6 +364,7 @@ export function LearningPath() {
       sessionId: saved.current.sessionId,
       contentId,
       contentVersion: catalog.contentVersion,
+      entryPoint,
     };
     delete saved.current.pending;
     delete saved.current.draft;
@@ -370,63 +427,6 @@ export function LearningPath() {
       display(state);
     });
   }
-  function closeDialog() {
-    returnDialogFocus.current = true;
-    setConfirm(false);
-    dialog.current?.close();
-    trigger.current?.focus();
-  }
-  async function exportData() {
-    await run(async () => {
-      type Page = {
-        version: number;
-        installationId: string;
-        throughCursor: number;
-        events: LearningPathEvent[];
-        nextCursor: number;
-        done: boolean;
-      };
-      let page = await api<Page>("/export?limit=100");
-      const first = page;
-      const events = [...page.events];
-      while (!page.done) {
-        const previous = page.nextCursor;
-        page = await api<Page>(
-          `/export?limit=100&afterCursor=${previous}&throughCursor=${first.throughCursor}`,
-        );
-        if (
-          page.throughCursor !== first.throughCursor ||
-          page.nextCursor <= previous
-        )
-          throw new Error(
-            "Export cursor did not advance. Please retry the download.",
-          );
-        events.push(...page.events);
-      }
-      const url = URL.createObjectURL(
-        new Blob(
-          [
-            JSON.stringify(
-              {
-                version: first.version,
-                installationId: first.installationId,
-                throughCursor: first.throughCursor,
-                events,
-              },
-              null,
-              2,
-            ),
-          ],
-          { type: "application/json" },
-        ),
-      );
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = "poker-learning-path.json";
-      anchor.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }, "data");
-  }
   const lessons = catalog?.units.flatMap((unit) => unit.lessons) ?? [];
   const nextLesson = lessons.find(
     (lesson) => lesson.contentId === progress?.nextLessonContentId,
@@ -434,9 +434,19 @@ export function LearningPath() {
   const reviewLesson = lessons.find(
     (lesson) => lesson.contentId === progress?.reviewSuggestion?.contentId,
   );
-  const dailyLesson = nextLesson ?? reviewLesson;
+  const dailyLesson = nextLesson ?? reviewLesson ?? lessons[0];
+  const dailyEntryPoint: NonNullable<StartLearningInstance["entryPoint"]> =
+    nextLesson
+      ? "daily-recommendation"
+      : reviewLesson
+        ? "review"
+        : "repeat";
   const activePractice = !!progress?.activeInstanceId;
   async function resumeDaily() {
+    if (paused && instance && !instance.complete) {
+      setPaused(false);
+      return;
+    }
     if (!progress?.activeInstanceId) return;
     saved.current.instanceId = progress.activeInstanceId;
     persist();
@@ -445,18 +455,40 @@ export function LearningPath() {
   }
   return (
     <section
-      className="panel learning-path"
+      className={`panel learning-path${instance && !paused ? " is-lesson" : ""}`}
       aria-busy={busy}
-      aria-label="Beginner learning path"
+      aria-label="Poker strategy practice"
     >
-      <span className="eyebrow">Beginner path · Local progress</span>
-      <h1 ref={courseHeading} tabIndex={-1}>
-        {catalog?.title ?? "Loading beginner path…"}
-      </h1>
-      {progress && catalog && (
-        <div role="region" aria-labelledby="daily-practice-title">
-          <span className="eyebrow">One short lesson</span>
+      {(!instance || paused) && (
+        <>
+          <div className="course-heading">
+            <h1 ref={courseHeading} tabIndex={-1}>
+              {catalog?.title ?? "Loading strategy practice…"}
+            </h1>
+            {catalog && progress && (
+              <div className="course-progress">
+                <span>
+                  {progress.completedContentIds.length} of {lessons.length}{" "}
+                  skills practiced
+                </span>
+                <progress
+                  aria-label="Course completion"
+                  value={progress.completedContentIds.length}
+                  max={lessons.length}
+                />
+              </div>
+            )}
+          </div>
+        </>
+      )}
+      {progress && catalog && (!instance || paused) && (
+        <div
+          className="daily-practice"
+          role="region"
+          aria-labelledby="daily-practice-title"
+        >
           <h2 id="daily-practice-title">Today's practice</h2>
+          <p className="quiet">Fresh situations each session.</p>
           <p role="status">
             {progress.completedToday
               ? "Completed today"
@@ -475,17 +507,14 @@ export function LearningPath() {
               </button>
             </div>
           )}
-          <p className="quiet">
-            Your streak counts days with a completed lesson. It measures
-            practice consistency and does not measure poker skill.
-          </p>
           {activePractice ? (
             <>
-              <p>Pick up your unfinished lesson.</p>
               <button
                 className="primary"
                 disabled={busy}
-                onClick={() => void run(resumeDaily)}
+                onClick={() =>
+                  paused ? setPaused(false) : void run(resumeDaily)
+                }
               >
                 Resume today's practice
               </button>
@@ -493,52 +522,32 @@ export function LearningPath() {
           ) : dailyLesson ? (
             <>
               <p>
-                {nextLesson ? "Up next" : "Review a missed skill"}:{" "}
-                {dailyLesson.title}
+                {nextLesson
+                  ? "Up next"
+                  : reviewLesson
+                    ? "Review a missed skill"
+                    : "Repeat a lesson"}
+                : {dailyLesson.title}
               </p>
               <button
                 className="primary"
                 disabled={busy}
-                onClick={() => void start(dailyLesson.contentId)}
+                onClick={() => void start(dailyLesson.contentId, dailyEntryPoint)}
               >
                 {progress.completedToday
                   ? "Practice another lesson"
                   : nextLesson
                     ? "Start today's practice"
-                    : "Practice missed ideas"}
+                    : reviewLesson
+                      ? "Practice missed ideas"
+                      : "Repeat today's practice"}
               </button>
             </>
           ) : (
-            <p>
-              Course complete. Choose any lesson below for today's practice.
-            </p>
+            <p>Choose a skill for a fresh set of scenarios.</p>
           )}
         </div>
       )}
-      {progress && (
-        <p>
-          {progress.completedLessons} lessons completed ·{" "}
-          {progress.answerAttempts} answers attempted ·{" "}
-          {Object.values(progress.bySkill).reduce(
-            (sum, skill) => sum + skill.incorrect,
-            0,
-          )}{" "}
-          mistakes to learn from
-        </p>
-      )}
-      {progress && (
-        <div role="region" aria-label="Fresh transfer results">
-          <p>
-            Fresh transfer results: {progress.transferCorrect}/
-            {progress.transferAttempts} correct on first presentations.
-          </p>
-          <p className="quiet">Reused variants count as practice only.</p>
-        </div>
-      )}
-      <p className="quiet">
-        Practice consistency and understanding are separate. These counts are
-        practice history, not a mastery or speed score.
-      </p>
       {error && (
         <div role="alert">
           <p>
@@ -562,86 +571,122 @@ export function LearningPath() {
         </div>
       )}
       {!catalog && !error && <p role="status">Loading your course…</p>}
-      {!instance && catalog && progress && (
-        <div role="region" aria-label="Recommended next lesson">
-          <p>
-            {
-              lessons.filter((lesson) =>
-                progress.completedContentIds.includes(lesson.contentId),
-              ).length
-            }{" "}
-            of {lessons.length} lessons completed
-          </p>
-          {nextLesson ? (
-            <>
-              <p>Recommended next lesson: {nextLesson.title}</p>
-              <button
-                disabled={busy}
-                className="secondary"
-                onClick={() => void start(nextLesson.contentId)}
-              >
-                Continue with {nextLesson.title}
-              </button>
-            </>
-          ) : (
-            <p>Course complete. Repeat any lesson for more practice.</p>
-          )}
-          {progress.reviewSuggestion && (
-            <>
-              <p>{progress.reviewSuggestion.reason}</p>
-              <button
-                disabled={busy}
-                className="secondary"
-                onClick={() => void start(progress.reviewSuggestion!.contentId)}
-              >
-                Review missed ideas
-              </button>
-            </>
-          )}
-        </div>
-      )}
-      {!instance &&
-        catalog &&
-        catalog.units.map((unit) => (
-          <div key={unit.id}>
-            <h2>{unit.title}</h2>
-            {unit.lessons.map((lesson) => (
-              <div key={lesson.contentId}>
-                <p>{lesson.title}</p>
-                {progress?.completedContentIds.includes(lesson.contentId) && (
-                  <p role="note" aria-label={`Completed ${lesson.title}`}>
-                    Completed · Repeat any time
-                  </p>
-                )}
-                <button
-                  disabled={busy}
-                  className="secondary"
-                  onClick={() => void start(lesson.contentId)}
-                >
-                  Start {lesson.title}
-                </button>
+      {(!instance || paused) && catalog && (
+        <ol className="course-path" aria-label="Strategy skills">
+          {catalog.units.map((unit, unitIndex) => (
+            <li className="course-unit" key={unit.id}>
+              <div className="unit-heading">
+                <span className="unit-number" aria-hidden="true">
+                  {unitIndex + 1}
+                </span>
+                <h2>{unit.title}</h2>
               </div>
-            ))}
-          </div>
-        ))}
-      {instance && !instance.complete && (
+              <ol className="unit-lessons">
+                {unit.lessons.map((lesson) => {
+                  const complete = progress?.completedContentIds.includes(
+                    lesson.contentId,
+                  );
+                  const next =
+                    lesson.contentId === progress?.nextLessonContentId;
+                  const resumable = Boolean(
+                    paused &&
+                    instance &&
+                    !instance.complete &&
+                    instance.contentId === lesson.contentId,
+                  );
+                  const current =
+                    paused && instance && !instance.complete ? resumable : next;
+                  return (
+                    <li key={lesson.contentId}>
+                      <button
+                        disabled={busy}
+                        className={`course-lesson ${current ? "next-lesson" : ""}`}
+                        aria-label={
+                          resumable
+                            ? `Resume ${lesson.title}`
+                            : complete
+                              ? `Repeat ${lesson.title} (completed)`
+                              : `Start ${lesson.title}`
+                        }
+                        aria-current={current ? "step" : undefined}
+                        onClick={() =>
+                          resumable
+                            ? setPaused(false)
+                            : void start(
+                                lesson.contentId,
+                                complete ? "repeat" : "path-selection",
+                              )
+                        }
+                      >
+                        <span className="lesson-marker" aria-hidden="true">
+                          {resumable ? "→" : complete ? "✓" : next ? "→" : "○"}
+                        </span>
+                        <span className="lesson-label">
+                          <strong>{lesson.title}</strong>
+                          {resumable ? (
+                            <span>In progress</span>
+                          ) : complete ? (
+                            <span
+                              role="note"
+                              aria-label={`Completed ${lesson.title}`}
+                            >
+                              Completed
+                            </span>
+                          ) : (
+                            <span>{next ? "Up next" : ""}</span>
+                          )}
+                        </span>
+                        <span className="lesson-action" aria-hidden="true">
+                          {resumable ? "Resume" : complete ? "Repeat" : "Start"}{" "}
+                          →
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            </li>
+          ))}
+        </ol>
+      )}
+      {instance && !paused && !instance.complete && (
         <>
-          <p className="quiet">
-            {instance.title} · Question{" "}
-            {Math.min(instance.questionIndex + 1, instance.totalQuestions)} of{" "}
-            {instance.totalQuestions}
-          </p>
-          <details open={instance.questionIndex === 0 || undefined}>
+          <div className="lesson-toolbar">
+            <button
+              className="secondary lesson-back"
+              disabled={busy}
+              onClick={() => setPaused(true)}
+            >
+              ← Back to course
+            </button>
+            <div className="lesson-progress">
+              <h1>{instance.title}</h1>
+              <span>
+                Question{" "}
+                {Math.min(instance.questionIndex + 1, instance.totalQuestions)}{" "}
+                of {instance.totalQuestions}
+              </span>
+              <progress
+                aria-label="Lesson progress"
+                value={instance.questionIndex}
+                max={instance.totalQuestions}
+              />
+            </div>
+          </div>
+          <details className="lesson-concept">
             <summary>Lesson concept</summary>
             <p>{instance.concept}</p>
             <p>{instance.intro}</p>
           </details>
           {question && (
-            <>
-              <h2 ref={heading} tabIndex={-1}>
+            <section
+              className="lesson-card"
+              aria-label="Current lesson question"
+            >
+              <h2 className="lesson-question" ref={heading} tabIndex={-1}>
                 {question.title}
               </h2>
-              <p>{question.prompt}</p>
+              <p className="lesson-prompt">{question.prompt}</p>
               {question.isTransfer && (
                 <p role="note" aria-label="Transfer question">
                   {instance.isFreshTransfer
@@ -665,12 +710,16 @@ export function LearningPath() {
                   }}
                 >
                   <fieldset
+                    className="lesson-answers"
                     disabled={busy || !ready || !!saved.current.pending}
                   >
                     <legend>Your answer</legend>
                     {question.answerKind === "choice" ? (
                       question.choices?.map((choice) => (
-                        <label key={choice.id}>
+                        <label
+                          className={`answer-option${answer?.kind === "choice" && answer.choiceId === choice.id ? " is-selected" : ""}`}
+                          key={choice.id}
+                        >
                           <input
                             type="radio"
                             name="path-answer"
@@ -726,7 +775,11 @@ export function LearningPath() {
                   </button>
                 </form>
               ) : (
-                <div role="region" aria-label="Path feedback">
+                <div
+                  className={`lesson-feedback ${feedback.correct ? "is-correct" : "is-incorrect"}`}
+                  role="region"
+                  aria-label="Path feedback"
+                >
                   <h2 ref={feedbackHeading} tabIndex={-1}>
                     {feedback.correct ? "Correct" : "Try this idea again"}
                   </h2>
@@ -741,7 +794,7 @@ export function LearningPath() {
                   </button>
                 </div>
               )}
-            </>
+            </section>
           )}
           {!question && (
             <button
@@ -754,11 +807,11 @@ export function LearningPath() {
           )}
         </>
       )}
-      {instance?.complete && (
-        <>
-          <h2 tabIndex={-1} ref={heading}>
+      {instance?.complete && !paused && (
+        <div className="lesson-complete">
+          <h1 tabIndex={-1} ref={heading}>
             Lesson complete
-          </h2>
+          </h1>
           <p>
             You practiced {instance.totalQuestions} decisions. Review missed
             ideas or try another lesson.
@@ -769,7 +822,9 @@ export function LearningPath() {
               <button
                 className="secondary"
                 disabled={busy}
-                onClick={() => void start(progress.reviewSuggestion!.contentId)}
+                onClick={() =>
+                  void start(progress.reviewSuggestion!.contentId, "review")
+                }
               >
                 Review missed ideas
               </button>
@@ -785,91 +840,7 @@ export function LearningPath() {
           >
             Back to path
           </button>
-        </>
-      )}
-      {dataError && (
-        <div role="alert">
-          <p>{dataError}</p>
-          <button
-            className="secondary"
-            disabled={busy}
-            onClick={() => void run(dataRetry.current, "data")}
-          >
-            Retry download
-          </button>
         </div>
-      )}
-      <div className="path-data-controls">
-        <button
-          className="secondary"
-          disabled={busy || !catalog}
-          onClick={() => void exportData()}
-        >
-          Download path data
-        </button>
-        <button
-          className="secondary"
-          ref={trigger}
-          disabled={busy}
-          onClick={() => setConfirm(true)}
-        >
-          Clear path progress
-        </button>
-      </div>
-      {confirm && (
-        <dialog
-          ref={dialog}
-          aria-labelledby="clear-path-title"
-          onCancel={(event) => {
-            event.preventDefault();
-            closeDialog();
-          }}
-        >
-          <h2 id="clear-path-title">Clear this learning path?</h2>
-          <p>
-            This deletes this course's local answers, events and progress.
-            Earlier exercises, table history and downloaded copies remain
-            separate.
-          </p>
-          {clearError && (
-            <div role="alert">
-              <p>{clearError}</p>
-              <button
-                className="secondary"
-                disabled={busy}
-                onClick={() => void run(clearRetry.current, "clear")}
-              >
-                Retry clear progress
-              </button>
-            </div>
-          )}
-          <button className="secondary" onClick={closeDialog}>
-            Keep progress
-          </button>
-          <button
-            className="secondary"
-            disabled={busy}
-            onClick={() =>
-              void run(async () => {
-                await api("/progress", undefined, "DELETE");
-                setError("");
-                setStale(false);
-                setDataError("");
-                saved.current = {
-                  sessionId: saved.current.sessionId,
-                  acks: {},
-                };
-                persist();
-                setInstance(null);
-                setFeedback(null);
-                await refresh();
-                closeDialog();
-              }, "clear")
-            }
-          >
-            Confirm clear path progress
-          </button>
-        </dialog>
       )}
     </section>
   );

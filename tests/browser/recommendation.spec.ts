@@ -32,7 +32,7 @@ for (const suggestion of ["fold", "call", "raise"] as const) {
       });
     });
     await page.goto("/");
-    await page.getByRole("button", { name: "Bot table", exact: true }).click();
+    await page.getByRole("button", { name: "Play", exact: true }).click();
     await page
       .getByRole("button", { name: "Start table", exact: true })
       .click();
@@ -139,7 +139,7 @@ test("solver chart shows mixed actions, keyboard access, mobile scrolling and re
     });
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByRole("button", { name: "Start table", exact: true }).click();
   await page
     .getByRole("button", { name: "Show move hint", exact: true })

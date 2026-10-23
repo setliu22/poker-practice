@@ -35,6 +35,13 @@ async function seeded(page: Page, seed: number) {
     height: 850,
   });
   await page.goto("/");
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Reference", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Open preflop walkthrough", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Watch the action reach you" }),
   ).toBeVisible();
@@ -379,6 +386,13 @@ test("guide loading, errors and retry retain a usable current walkthrough", asyn
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
+  await page.goto("/");
+  const libraryLoaded = page.waitForResponse("**/api/preflop-charts");
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Reference", exact: true })
+    .click();
+  await libraryLoaded;
   let attempts = 0;
   await page.route("**/api/preflop-charts", async (route) => {
     attempts++;
@@ -387,7 +401,9 @@ test("guide loading, errors and retry retain a usable current walkthrough", asyn
       await route.fulfill({ status: 503, json: { error: "Unavailable" } });
     } else await route.continue();
   });
-  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Open preflop walkthrough", exact: true })
+    .click();
   await expect(page.getByRole("status")).toHaveText(
     "Loading the opening guide…",
   );

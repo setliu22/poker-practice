@@ -8,9 +8,12 @@ test("lesson teaches reasoning, changes assumptions, saves progress and fits mob
   await request.delete("/api/progress");
   await page.goto("/");
   await page
-    .getByText("More practice and earlier lessons", { exact: true })
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Reference", exact: true })
     .click();
-  await page.getByRole("button", { name: "Open earlier exercises" }).click();
+  await page
+    .getByRole("button", { name: "Open legacy lessons", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Should I bet or check?" }),
   ).toBeVisible();
@@ -106,9 +109,12 @@ test("lesson teaches reasoning, changes assumptions, saves progress and fits mob
   ).toBeVisible();
   await page.reload();
   await page
-    .getByText("More practice and earlier lessons", { exact: true })
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Reference", exact: true })
     .click();
-  await page.getByRole("button", { name: "Open earlier exercises" }).click();
+  await page
+    .getByRole("button", { name: "Open legacy lessons", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Saved learning progress" }),
   ).toBeVisible();

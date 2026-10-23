@@ -103,7 +103,7 @@ test("draw density shows a weighted union without double counting and explains i
       : route.fallback(),
   );
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByRole("button", { name: "Start table", exact: true }).click();
   await page.getByRole("button", { name: /^Review decisions/ }).click();
   const reviews = page.locator(".decision-review");

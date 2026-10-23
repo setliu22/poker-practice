@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { best, equity, potOdds } from "../../../packages/poker/src/index.js";
 import { openingCharts } from "../../../packages/poker/src/preflop-charts.js";
 import {
@@ -8,6 +9,11 @@ import {
   type LearningPathFeedback,
   type LearningPathQuestion,
 } from "../../../packages/shared/src/learning-path.js";
+import {
+  LEARNING_PATH_GENERATOR_VERSION,
+  LEARNING_PATH_TEMPLATE_VERSION,
+  generateVersion2Lesson,
+} from "./learning-path-generated.js";
 
 // Answer keys and grading rules stay on the server. Only getPublicQuestion is
 // suitable for an unanswered question response.
@@ -592,42 +598,72 @@ const postflopLesson: LessonDefinition = {
     ),
   ],
 };
-const lessons: LessonDefinition[] = [
+const legacyLessons: LessonDefinition[] = [
   firstLesson,
   rankingLesson,
   openingLesson,
   equityLesson,
   postflopLesson,
 ];
-const lessonSummary = (lesson: LessonDefinition) => ({
-  contentId: lesson.contentId,
-  title: lesson.title,
-  skillId: lesson.skillId,
-});
 const catalog: LearningPathCatalog = {
   pathId: "poker-foundations",
-  contentVersion,
-  title: "Poker foundations",
+  contentVersion: "2",
+  title: "Poker strategy",
   units: [
     {
-      id: "table-basics",
-      title: "At the table",
-      lessons: [firstLesson, rankingLesson].map(lessonSummary),
-    },
-    {
-      id: "position-openings",
-      title: "Position and openings",
-      lessons: [openingLesson].map(lessonSummary),
+      id: "preflop-decisions",
+      title: "Preflop decisions",
+      lessons: [
+        {
+          contentId: "strategy-preflop",
+          title: "Position and opening baselines",
+          skillId: "strategy-preflop",
+        },
+      ],
     },
     {
       id: "price-and-equity",
-      title: "Price and pot share",
-      lessons: [equityLesson].map(lessonSummary),
+      title: "Price and equity",
+      lessons: [
+        {
+          contentId: "strategy-equity",
+          title: "Pot price and range equity",
+          skillId: "strategy-equity",
+        },
+      ],
     },
     {
-      id: "postflop-basics",
-      title: "First postflop decisions",
-      lessons: [postflopLesson].map(lessonSummary),
+      id: "draw-decisions",
+      title: "Postflop draws",
+      lessons: [
+        {
+          contentId: "strategy-postflop",
+          title: "Draws, equity and call prices",
+          skillId: "strategy-postflop",
+        },
+      ],
+    },
+    {
+      id: "ranges-and-blockers",
+      title: "Ranges and blockers",
+      lessons: [
+        {
+          contentId: "strategy-ranges",
+          title: "Read ranges and card blockers",
+          skillId: "strategy-ranges",
+        },
+      ],
+    },
+    {
+      id: "value-betting",
+      title: "Value betting",
+      lessons: [
+        {
+          contentId: "strategy-betting",
+          title: "Bet sizing and value",
+          skillId: "strategy-betting",
+        },
+      ],
     },
   ],
 };
@@ -638,8 +674,20 @@ export function getLearningPathCatalog(): LearningPathCatalog {
 export function getLessonDefinition(
   contentId: string,
   contentVersion: string,
+  exerciseSeed?: number,
 ): LessonDefinition | undefined {
-  const lesson = lessons.find(
+  if (contentVersion === "2") {
+    if (
+      exerciseSeed === undefined ||
+      !Number.isInteger(exerciseSeed) ||
+      exerciseSeed < 0 ||
+      exerciseSeed > 4294967295
+    )
+      return undefined;
+    return generateVersion2Lesson(contentId, exerciseSeed);
+  }
+  if (contentVersion !== "1") return undefined;
+  const lesson = legacyLessons.find(
     (item) =>
       item.contentId === contentId && item.contentVersion === contentVersion,
   );
@@ -649,11 +697,9 @@ function findQuestion(
   contentId: string,
   contentVersion: string,
   questionId: string,
+  exerciseSeed?: number,
 ): QuestionDefinition | undefined {
-  const lesson = lessons.find(
-    (item) =>
-      item.contentId === contentId && item.contentVersion === contentVersion,
-  );
+  const lesson = getLessonDefinition(contentId, contentVersion, exerciseSeed);
   return (
     lesson &&
     [...lesson.coreQuestions, ...lesson.transferQuestions].find(
@@ -665,8 +711,14 @@ export function getPublicQuestion(
   contentId: string,
   contentVersion: string,
   questionId: string,
+  exerciseSeed?: number,
 ): LearningPathQuestion | undefined {
-  const item = findQuestion(contentId, contentVersion, questionId);
+  const item = findQuestion(
+    contentId,
+    contentVersion,
+    questionId,
+    exerciseSeed,
+  );
   // Parse a dedicated public object; strict validation fails closed if a future
   // author accidentally attaches an answer key or grading metadata to it.
   return item && learningPathQuestionSchema.parse(item.question);
@@ -675,8 +727,9 @@ export function selectLearningPathTransfer(
   contentId: string,
   contentVersion: string,
   seenQuestionIds: readonly string[],
+  exerciseSeed?: number,
 ): { questionId: string; reason: string } {
-  const lesson = getLessonDefinition(contentId, contentVersion);
+  const lesson = getLessonDefinition(contentId, contentVersion, exerciseSeed);
   if (!lesson) throw new Error("Unknown learning content or version");
   const fresh = lesson.transferQuestions.find(
     (item) => !seenQuestionIds.includes(item.question.id),
@@ -710,8 +763,14 @@ export function gradeLearningPathAnswer(
   contentVersion: string,
   questionId: string,
   answer: LearningPathAnswer,
+  exerciseSeed?: number,
 ): LearningPathFeedback {
-  const item = findQuestion(contentId, contentVersion, questionId);
+  const item = findQuestion(
+    contentId,
+    contentVersion,
+    questionId,
+    exerciseSeed,
+  );
   if (!item) throw new Error("Unknown learning question or content version");
   const parsed = learningPathAnswerSchema.parse(answer);
   const key = item.correctAnswer;
@@ -730,4 +789,42 @@ export function gradeLearningPathAnswer(
     takeaway: item.takeaway,
     skillId: item.question.skillId,
   };
+}
+
+/** Stable, answer-free fingerprint for generated scenario facts, independent
+ * of the question slot and display order used in a particular session. */
+export function getScenarioFingerprint(
+  contentId: string,
+  contentVersion: string,
+  exerciseSeed: number,
+  questionId: string,
+): string | undefined {
+  if (
+    contentVersion !== "2" ||
+    !Number.isInteger(exerciseSeed) ||
+    exerciseSeed < 0 ||
+    exerciseSeed > 4294967295
+  )
+    return undefined;
+  const question = getPublicQuestion(
+    contentId,
+    contentVersion,
+    questionId,
+    exerciseSeed,
+  );
+  if (!question) return undefined;
+  const canonicalScenario = JSON.stringify({
+    generatorVersion: LEARNING_PATH_GENERATOR_VERSION,
+    templateVersion: LEARNING_PATH_TEMPLATE_VERSION,
+    contentId,
+    skillId: question.skillId,
+    prompt: question.prompt,
+    assumptions: question.assumptions,
+    answerKind: question.answerKind,
+    choices: question.choices
+      ? [...question.choices].sort((a, b) => a.id.localeCompare(b.id))
+      : undefined,
+    unitLabel: question.unitLabel,
+  });
+  return createHash("sha256").update(canonicalScenario).digest("hex");
 }

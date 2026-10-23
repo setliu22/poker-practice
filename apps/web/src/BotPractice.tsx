@@ -107,9 +107,19 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
           body: JSON.stringify(body),
         },
   );
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error ?? "Request failed.");
-  return data;
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error(
+      "The simulator returned an incomplete response. Reload the table before continuing.",
+    );
+  }
+  if (!response.ok)
+    throw new Error(
+      (data as { error?: string } | null)?.error ?? "Request failed.",
+    );
+  return data as T;
 }
 export function BotPractice() {
   const [screen, setScreen] = useState<"play" | "games">("play");

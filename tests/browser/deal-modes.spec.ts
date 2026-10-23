@@ -22,7 +22,7 @@ test("easy bot deals use the selected starting-hand rule and keep the button and
   request,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   const players = page.getByLabel("Players, including you", { exact: true });
   const startingHands = page.getByLabel("Starting hands", { exact: true });
   await startingHands.selectOption("easy");
@@ -101,7 +101,7 @@ test("player-count choices can start a larger table without losing the saved act
   request,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   const players = page.getByLabel("Players, including you", { exact: true });
   const startingHands = page.getByLabel("Starting hands", { exact: true });
   await players.selectOption("2");

@@ -33,7 +33,7 @@ npm run build
 
 `npm test` runs `tests/**/*.test.ts` via Vitest, including API integration tests. `npm run build` runs `tsc --noEmit`, builds the Vite UI, and bundles the API plus assistant worker. There is no separate lint script. Target a relevant suite with `npx vitest run tests/<actual-file>.test.ts`; choose the actual path from `rg --files tests`.
 
-## Poker foundations learning path
+## Generated poker strategy practice
 
 Run these focused checks from the repository root after changing course content, the learning API, or the course UI:
 
@@ -59,7 +59,7 @@ On Linux, install required system dependencies using `npx playwright install --w
 npm run test:browser
 ```
 
-Playwright config starts its own API on `127.0.0.1:3002` and Vite on `127.0.0.1:5174`, uses `data/browser-test.sqlite`, one worker and the desktop project. Those ports must be free; normal app ports 3001/5173 may remain running. Browser tests clear their test DB between cases. Do not launch multiple full browser runs concurrently against these shared ports/database.
+Playwright config starts its own API on `127.0.0.1:3002` and Vite on `127.0.0.1:5174`, uses `data/browser-test.sqlite`, one worker and the desktop project. Tests tagged `@mobile` are excluded by default; this also prevents historical 320px table cases from running inside the desktop project. Those ports must be free; normal app ports 3001/5173 may remain running. Browser tests clear their test DB between cases. Do not launch multiple full browser runs concurrently against these shared ports/database.
 
 For a scoped flow use an actual browser filename, for example:
 

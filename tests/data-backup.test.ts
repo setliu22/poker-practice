@@ -113,7 +113,7 @@ describe("local recoverable snapshots", () => {
     await rm(`${backup}.manifest.json`);
     await expect(
       restoreDataBackup(backup, join(directory, "new.sqlite")),
-    ).resolves.toMatchObject({ version: 1, schemaVersion: 13 });
+    ).resolves.toMatchObject({ version: 1, schemaVersion: 14 });
     const invalid = join(directory, "other.sqlite"),
       other = new Database(invalid);
     other.exec("CREATE TABLE unrelated(x)");

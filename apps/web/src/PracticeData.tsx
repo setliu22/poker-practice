@@ -136,11 +136,7 @@ export function PracticeData() {
         }}
       >
         <summary>Local practice data</summary>
-        <p>
-          Saved on this device. Nothing uploaded. Decisions and shown study aids
-          are retained for future practice analysis. Synthetic training examples
-          are kept separate.
-        </p>
+        <p>Export or delete your recorded decisions and study-aid history.</p>
         {summary && (
           <p>
             {summary.decisions} recorded decisions · {summary.viewed} decision

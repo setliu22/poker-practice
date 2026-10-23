@@ -4,9 +4,12 @@ test("practices an all-in decision and price contrast without mandatory card cla
 }) => {
   await page.goto("/");
   await page
-    .getByText("More practice and earlier lessons", { exact: true })
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Reference", exact: true })
     .click();
-  await page.getByRole("button", { name: "Open earlier exercises" }).click();
+  await page
+    .getByRole("button", { name: "Open legacy lessons", exact: true })
+    .click();
 
   await page
     .getByRole("button", { name: "Open all-in decision practice" })

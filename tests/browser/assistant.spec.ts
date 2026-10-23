@@ -8,7 +8,7 @@ test("layered assistant is optional, keyboard usable, read-only and fits mobile"
     height: 900,
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByRole("button", { name: "Start table", exact: true }).click();
   await page
     .getByRole("button", { name: "Decision assistant", exact: true })

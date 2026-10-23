@@ -5,20 +5,23 @@ import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import Database from "better-sqlite3";
+import express from "express";
 import { openDatabase } from "../apps/api/src/database";
 import { createApp } from "../apps/api/src/app";
+import { learningPathRoutes } from "../apps/api/src/learning-path";
 import * as learningContent from "../apps/api/src/learning-path-content";
 import {
   learningPathEventSchema,
   learningPathInstanceStateSchema,
   learningPathProgressSchema,
+  type LearningPathAnswerCommand,
 } from "../packages/shared/src/learning-path";
 let db: ReturnType<typeof openDatabase>,
-  app: ReturnType<typeof createApp>,
+  app: ReturnType<typeof express>,
   directory: string;
 const base = "/api/v1/learning-path";
 const ack = () => ({ eventId: randomUUID() });
-const command = () => ({
+const command = (): LearningPathAnswerCommand => ({
   requestId: randomUUID(),
   contentVersion: "1",
   answer: { kind: "choice", choiceId: "check" },
@@ -38,7 +41,17 @@ async function start(overrides = {}) {
     .expect(200);
   return { body, state: result.body };
 }
-function answer(instanceId: string, questionId: string, body = command()) {
+function appWithSeedSource(nextSeed: () => number) {
+  const isolated = express();
+  isolated.use(express.json());
+  isolated.use(base, learningPathRoutes(db, nextSeed));
+  return isolated;
+}
+function answer(
+  instanceId: string,
+  questionId: string,
+  body: LearningPathAnswerCommand = command(),
+) {
   return request(app)
     .post(`${base}/instances/${instanceId}/questions/${questionId}/answers`)
     .send(body);
@@ -50,7 +63,20 @@ async function finish(instanceId: string) {
   while (state.question) {
     const root = `${base}/instances/${instanceId}/questions/${state.question.id}`;
     await request(app).post(`${root}/presented`).send(ack()).expect(200);
-    await answer(instanceId, state.question.id).expect(200);
+    await answer(
+      instanceId,
+      state.question.id,
+      state.contentVersion === "1"
+        ? command()
+        : {
+            requestId: randomUUID(),
+            contentVersion: state.contentVersion,
+            answer:
+              state.question.answerKind === "choice"
+                ? { kind: "choice", choiceId: state.question.choices[0].id }
+                : { kind: "percent", value: 50 },
+          },
+    ).expect(200);
     state = (
       await request(app).post(`${root}/feedback-shown`).send(ack()).expect(200)
     ).body;
@@ -283,6 +309,264 @@ describe("daily practice projection", () => {
       .get(`${base}/progress?timeZone=UTC&timeZone=Asia/Tokyo`)
       .expect(400);
   });
+  it("projects seven completion dates in the requested timezone across DST", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-03-09T04:30:00Z"));
+    completion("2026-03-07T17:00:00Z");
+    completion("2026-03-08T16:00:00Z");
+    completion("2026-03-09T04:00:00Z");
+    const result = await request(app)
+      .get(`${base}/progress`)
+      .query({ timeZone: "America/New_York" })
+      .expect(200);
+    learningPathProgressSchema.parse(result.body);
+    expect(result.body.recentPracticeDays).toEqual([
+      { date: "2026-03-03", completed: false, today: false },
+      { date: "2026-03-04", completed: false, today: false },
+      { date: "2026-03-05", completed: false, today: false },
+      { date: "2026-03-06", completed: false, today: false },
+      { date: "2026-03-07", completed: true, today: false },
+      { date: "2026-03-08", completed: true, today: false },
+      { date: "2026-03-09", completed: true, today: true },
+    ]);
+  });
+});
+describe("generated strategy learning path API", () => {
+  async function firstCurrentLesson() {
+    const catalog = (await request(app).get(base).expect(200)).body;
+    const lesson = catalog.units.flatMap((unit: any) => unit.lessons)[0];
+    return {
+      contentId: lesson.contentId,
+      contentVersion: catalog.contentVersion,
+    };
+  }
+  function startBody(
+    lesson: { contentId: string; contentVersion: string },
+    entryPoint = "daily-recommendation",
+  ) {
+    return {
+      ...ack(),
+      instanceId: randomUUID(),
+      sessionId: randomUUID(),
+      ...lesson,
+      entryPoint,
+    };
+  }
+  it("stores a server seed once and exact start retries reconstruct the same generated instance", async () => {
+    const lesson = await firstCurrentLesson(),
+      nextSeed = vi.fn(() => 123456),
+      body = startBody(lesson);
+    app = appWithSeedSource(nextSeed);
+    const first = await request(app)
+      .post(`${base}/instances`)
+      .send(body)
+      .expect(200);
+    const retry = await request(app)
+      .post(`${base}/instances`)
+      .send(body)
+      .expect(200);
+    expect(retry.body).toEqual(first.body);
+    expect(nextSeed).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(first.body)).not.toMatch(
+      /exerciseSeed|generatorVersion|correctAnswer|gradingRule|explanation|takeaway/,
+    );
+    expect(learningPathInstanceStateSchema.parse(first.body)).toBeTruthy();
+    const events = (await request(app).get(`${base}/export`).expect(200)).body
+      .events;
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      schemaVersion: 2,
+      contentVersion: "2",
+      kind: "lesson-opened",
+      payload: {
+        entryPoint: "daily-recommendation",
+        exerciseSeed: 123456,
+      },
+    });
+    expect(events[0].payload.generatorVersion).toBeTruthy();
+  });
+  it("uses a unique exercise seed for each new instance", async () => {
+    const lesson = await firstCurrentLesson();
+    app = appWithSeedSource(() => 77);
+    const first = await start({ ...lesson, entryPoint: "path-selection" });
+    const second = await start({ ...lesson, entryPoint: "repeat" });
+    const opens = (
+      await request(app).get(`${base}/export`).expect(200)
+    ).body.events.filter((event: any) => event.kind === "lesson-opened");
+    expect(opens.map((event: any) => event.payload.exerciseSeed)).toEqual([
+      77, 78,
+    ]);
+    expect(first.state.contentId).toBe(lesson.contentId);
+    expect(second.state.contentId).toBe(lesson.contentId);
+  });
+  it("projects completed strategy skills while retaining legacy completion totals", async () => {
+    const catalog = (await request(app).get(base).expect(200)).body,
+      lessons = catalog.units.flatMap((unit: any) => unit.lessons);
+    app = appWithSeedSource(() => 400);
+    const legacy = await start();
+    await finish(legacy.body.instanceId);
+    const strategy = await start({
+      contentId: lessons[0].contentId,
+      contentVersion: catalog.contentVersion,
+      entryPoint: "daily-recommendation",
+    });
+    await finish(strategy.body.instanceId);
+    const progress = (await request(app).get(`${base}/progress`).expect(200))
+      .body;
+    expect(progress).toMatchObject({
+      completedLessons: 2,
+      completedContentIds: [lessons[0].contentId],
+      nextLessonContentId: lessons[1].contentId,
+    });
+  });
+  it("records the selected entry point and rejects changed start retries", async () => {
+    const lesson = await firstCurrentLesson(),
+      body = startBody(lesson, "review");
+    app = appWithSeedSource(() => 910);
+    await request(app).post(`${base}/instances`).send(body).expect(200);
+    await request(app)
+      .post(`${base}/instances`)
+      .send({ ...body, entryPoint: "repeat" })
+      .expect(409);
+    const events = (await request(app).get(`${base}/export`).expect(200)).body
+      .events;
+    expect(events).toHaveLength(1);
+    expect(events[0].payload.entryPoint).toBe("review");
+  });
+  it("keeps seeded answer retries exact and rejects stale or changed submissions", async () => {
+    const lesson = await firstCurrentLesson(),
+      opened = await start({
+        ...lesson,
+        entryPoint: "path-selection",
+      }),
+      question = opened.state.question,
+      url = `${base}/instances/${opened.body.instanceId}/questions/${question.id}`;
+    await request(app).post(`${url}/presented`).send(ack()).expect(200);
+    const answerBody = {
+      requestId: randomUUID(),
+      contentVersion: lesson.contentVersion,
+      answer:
+        question.answerKind === "choice"
+          ? { kind: "choice", choiceId: question.choices[0].id }
+          : { kind: "percent", value: 50 },
+    };
+    await request(app)
+      .post(`${url}/answers`)
+      .send({ ...answerBody, requestId: randomUUID(), contentVersion: "1" })
+      .expect(409);
+    const result = await request(app)
+      .post(`${url}/answers`)
+      .send(answerBody)
+      .expect(200);
+    expect(
+      (await request(app).post(`${url}/answers`).send(answerBody).expect(200))
+        .text,
+    ).toBe(result.text);
+    await request(app)
+      .post(`${url}/answers`)
+      .send({
+        ...answerBody,
+        answer:
+          question.answerKind === "choice"
+            ? { kind: "choice", choiceId: question.choices[1].id }
+            : { kind: "percent", value: 51 },
+      })
+      .expect(409);
+  });
+  it("rebuilds generated questions after restart without returning the seed", async () => {
+    const lesson = await firstCurrentLesson(),
+      body = startBody(lesson);
+    app = appWithSeedSource(() => 8080);
+    const before = await request(app)
+      .post(`${base}/instances`)
+      .send(body)
+      .expect(200);
+    db.close();
+    db = openDatabase(join(directory, "test.sqlite"));
+    app = createApp(db);
+    const after = await request(app)
+      .get(`${base}/instances/${body.instanceId}`)
+      .expect(200);
+    expect(after.body).toEqual(before.body);
+    expect(JSON.stringify(after.body)).not.toMatch(/exerciseSeed/);
+  });
+  it("rejects replay when the saved generator version cannot be reconstructed", async () => {
+    const lesson = await firstCurrentLesson(),
+      opened = await start({
+        ...lesson,
+        entryPoint: "path-selection",
+      });
+    db.exec("DROP TRIGGER learning_path_events_no_update");
+    db.prepare(
+      "UPDATE learning_path_events SET payload=json_set(payload,'$.generatorVersion','missing-generator-v99') WHERE instance_id=? AND kind='lesson-opened'",
+    ).run(opened.body.instanceId);
+    db.exec(
+      "CREATE TRIGGER learning_path_events_no_update BEFORE UPDATE ON learning_path_events BEGIN SELECT RAISE(ABORT, 'Learning path events are immutable'); END",
+    );
+
+    await request(app)
+      .get(`${base}/instances/${opened.body.instanceId}`)
+      .expect(409, {
+        error: "This generated practice version is unavailable.",
+      });
+  });
+  it("records stable scenario fingerprints and derives transfer freshness from them", async () => {
+    const lesson = await firstCurrentLesson();
+    let next = 2000;
+    app = appWithSeedSource(() => next++);
+    const presented: any[] = [];
+    for (let index = 0; index < 2; index++) {
+      const opened = await start({ ...lesson, entryPoint: "repeat" });
+      await finish(opened.body.instanceId);
+      const events = (
+        await request(app).get(`${base}/export`).expect(200)
+      ).body.events.filter(
+        (event: any) =>
+          event.instanceId === opened.body.instanceId &&
+          event.kind === "question-presented",
+      );
+      presented.push(events.at(-1));
+    }
+    for (const event of presented) {
+      expect(event.schemaVersion).toBe(2);
+      expect(event.payload).toMatchObject({
+        isTransfer: true,
+        scenarioFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
+        templateVersion: expect.any(String),
+      });
+    }
+    const all = (
+      await request(app).get(`${base}/export`).expect(200)
+    ).body.events.filter((event: any) => event.kind === "question-presented");
+    const firstTransfer = all.find(
+      (event: any) =>
+        event.instanceId === presented[0].instanceId &&
+        event.payload.isTransfer,
+    );
+    const secondTransfer = all.find(
+      (event: any) =>
+        event.instanceId === presented[1].instanceId &&
+        event.payload.isTransfer,
+    );
+    expect(firstTransfer.payload.isFreshTransfer).toBe(true);
+    expect(secondTransfer.payload.isFreshTransfer).toBe(
+      !all.some(
+        (event: any) =>
+          event.cursor < secondTransfer.cursor &&
+          event.payload.scenarioFingerprint ===
+            secondTransfer.payload.scenarioFingerprint,
+      ),
+    );
+  });
+  it("rolls back a lesson start when generated content is invalid", async () => {
+    const lesson = await firstCurrentLesson(),
+      body = startBody(lesson);
+    app = appWithSeedSource(() => -1);
+    await request(app).post(`${base}/instances`).send(body).expect(503);
+    expect(
+      db.prepare("SELECT COUNT(*) n FROM learning_path_events").get(),
+    ).toEqual({ n: 0 });
+  });
 });
 describe("local learning path ledger", () => {
   it("rebuilds distinct course completion and recommends the first unfinished lesson through repeats and restart", async () => {
@@ -295,7 +579,7 @@ describe("local learning path ledger", () => {
     expect(await progress()).toMatchObject({
       completedLessons: 0,
       completedContentIds: [],
-      nextLessonContentId: "table-flow",
+      nextLessonContentId: "strategy-preflop",
     });
     const first = await start();
     const root = `${base}/instances/${first.body.instanceId}/questions/${first.state.question.id}`;
@@ -303,15 +587,15 @@ describe("local learning path ledger", () => {
     await answer(first.body.instanceId, first.state.question.id).expect(200);
     expect(await progress()).toMatchObject({
       completedContentIds: [],
-      nextLessonContentId: "table-flow",
+      nextLessonContentId: "strategy-preflop",
     });
     await request(app).post(`${root}/feedback-shown`).send(ack()).expect(200);
     await finish(first.body.instanceId);
     const repeat = await start();
     expect(await progress()).toMatchObject({
       completedLessons: 1,
-      completedContentIds: ["table-flow"],
-      nextLessonContentId: "hand-rankings",
+      completedContentIds: [],
+      nextLessonContentId: "strategy-preflop",
     });
     await finish(repeat.body.instanceId);
     db.close();
@@ -319,8 +603,8 @@ describe("local learning path ledger", () => {
     app = createApp(db);
     expect(await progress()).toMatchObject({
       completedLessons: 2,
-      completedContentIds: ["table-flow"],
-      nextLessonContentId: "hand-rankings",
+      completedContentIds: [],
+      nextLessonContentId: "strategy-preflop",
     });
     // Direct access can complete a later lesson without skipping an earlier gap.
     for (const contentId of [
@@ -332,25 +616,17 @@ describe("local learning path ledger", () => {
       const opened = await start({ contentId });
       await finish(opened.body.instanceId);
       if (contentId === "postflop-reasoning")
-        expect((await progress()).nextLessonContentId).toBe("hand-rankings");
+        expect((await progress()).nextLessonContentId).toBe("strategy-preflop");
     }
     const complete = await progress();
     expect(complete.completedLessons).toBe(6);
-    expect(complete.completedContentIds).toHaveLength(5);
-    expect(new Set(complete.completedContentIds)).toEqual(
-      new Set([
-        "table-flow",
-        "hand-rankings",
-        "position-opening",
-        "pot-odds-equity",
-        "postflop-reasoning",
-      ]),
-    );
-    expect(complete.nextLessonContentId).toBeNull();
+    expect(complete.completedContentIds).toEqual([]);
+    // Legacy rules lessons must not mark disjoint strategy skills done.
+    expect(complete.nextLessonContentId).toBe("strategy-preflop");
     await request(app).delete(`${base}/progress`).expect(200);
     expect(await progress()).toMatchObject({
       completedContentIds: [],
-      nextLessonContentId: "table-flow",
+      nextLessonContentId: "strategy-preflop",
     });
   });
   it("requires presentation before answers and feedback acknowledgement before advancing or completing", async () => {
@@ -531,10 +807,7 @@ describe("local learning path ledger", () => {
       transferCorrect: 1,
       answerAttempts: 15,
     });
-    expect(progress.reviewSuggestion).toMatchObject({
-      contentId: "table-flow",
-      skillId: "legal-actions",
-    });
+    expect(progress.reviewSuggestion).toBeNull();
     expect(db.prepare("SELECT COUNT(*) n FROM usage_events").get()).toEqual({
       n: 0,
     });
@@ -556,6 +829,7 @@ describe("local learning path ledger", () => {
     const installation = db
       .prepare("SELECT id FROM usage_installation")
       .get() as { id: string };
+    let seed = 10;
     function factPair(
       skillId: string,
       contentId: string,
@@ -564,12 +838,12 @@ describe("local learning path ledger", () => {
     ) {
       const envelope = {
         eventId: randomUUID(),
-        schemaVersion: 1,
+        schemaVersion: 2,
         installationId: installation.id,
         sessionId: randomUUID(),
         instanceId: randomUUID(),
         contentId,
-        contentVersion: "1",
+        contentVersion: "2",
         createdAt: "2026-10-16T12:00:00.000Z",
       };
       const requestId = randomUUID(),
@@ -580,6 +854,9 @@ describe("local learning path ledger", () => {
           payload: {
             questionOrder: [questionId],
             selectionReason: "Projection fixture.",
+            entryPoint: "review",
+            exerciseSeed: seed++,
+            generatorVersion: "test",
           },
         },
         ...(paired
@@ -621,7 +898,7 @@ describe("local learning path ledger", () => {
             "INSERT INTO learning_path_events(event_id,schema_version,installation_id,session_id,instance_id,content_id,content_version,kind,created_at,payload) VALUES(?,?,?,?,?,?,?,?,?,?)",
           ).run(
             event.eventId,
-            1,
+            event.schemaVersion,
             event.installationId,
             event.sessionId,
             event.instanceId,
@@ -743,8 +1020,8 @@ describe("local learning path ledger", () => {
       catalogBeforeClear,
     );
   });
-  it("migrates v12 additively without changing identity, lessons, games, usage or export sequence", () => {
-    const path = join(directory, "v12.sqlite"),
+  it("migrates version-13 events and receipts without changing cursors", () => {
+    const path = join(directory, "v13.sqlite"),
       old = new Database(path);
     for (const name of [
       "001_initial",
@@ -759,6 +1036,7 @@ describe("local learning path ledger", () => {
       "010_table_events",
       "011_usage",
       "012_usage_compatibility",
+      "013_learning_path",
     ])
       old.exec(readFileSync(`apps/api/migrations/${name}.sql`, "utf8"));
     old.prepare("INSERT INTO read_lessons VALUES('old',0,'now')").run();
@@ -771,8 +1049,45 @@ describe("local learning path ledger", () => {
         "INSERT INTO usage_events VALUES(42,?,1,'api-unknown',?,NULL,'game',0,'decision-committed','now','{}')",
       )
       .run(randomUUID(), randomUUID());
+    const learningEventId = randomUUID(),
+      learningInstanceId = randomUUID(),
+      learningSessionId = randomUUID(),
+      learningInstallationId = old
+        .prepare("SELECT id FROM usage_installation")
+        .get() as { id: string },
+      learningPayload = JSON.stringify({
+        questionOrder: ["old-question"],
+        selectionReason: "Preserved version-1 row.",
+      });
+    old
+      .prepare(
+        "INSERT INTO learning_path_events(cursor,event_id,schema_version,installation_id,session_id,instance_id,content_id,content_version,kind,created_at,payload) VALUES(42,?,1,?,?,?,'table-flow','1','lesson-opened','old-time',?)",
+      )
+      .run(
+        learningEventId,
+        learningInstallationId.id,
+        learningSessionId,
+        learningInstanceId,
+        learningPayload,
+      );
+    old
+      .prepare(
+        "INSERT INTO learning_path_answer_receipts(request_id,instance_id,question_id,payload_hash,event_cursor,response_json) VALUES(?,?,?,?,42,?)",
+      )
+      .run(
+        randomUUID(),
+        learningInstanceId,
+        "old-question",
+        "old-hash",
+        JSON.stringify({ correct: true }),
+      );
     old
       .prepare("UPDATE sqlite_sequence SET seq=80 WHERE name='usage_events'")
+      .run();
+    old
+      .prepare(
+        "UPDATE sqlite_sequence SET seq=80 WHERE name='learning_path_events'",
+      )
       .run();
     old
       .prepare(
@@ -818,10 +1133,63 @@ describe("local learning path ledger", () => {
       );
       expect(
         migrated.prepare("SELECT MAX(version) n FROM schema_migrations").get(),
-      ).toEqual({ n: 13 });
+      ).toEqual({ n: 14 });
       expect(
         migrated.prepare("SELECT COUNT(*) n FROM learning_path_events").get(),
-      ).toEqual({ n: 0 });
+      ).toEqual({ n: 1 });
+      expect(
+        migrated
+          .prepare(
+            "SELECT cursor,event_id,schema_version,installation_id,session_id,instance_id,content_id,content_version,kind,created_at,payload FROM learning_path_events",
+          )
+          .get(),
+      ).toEqual({
+        cursor: 42,
+        event_id: learningEventId,
+        schema_version: 1,
+        installation_id: learningInstallationId.id,
+        session_id: learningSessionId,
+        instance_id: learningInstanceId,
+        content_id: "table-flow",
+        content_version: "1",
+        kind: "lesson-opened",
+        created_at: "old-time",
+        payload: learningPayload,
+      });
+      expect(
+        migrated.prepare("SELECT * FROM learning_path_answer_receipts").get(),
+      ).toMatchObject({
+        instance_id: learningInstanceId,
+        question_id: "old-question",
+        payload_hash: "old-hash",
+        event_cursor: 42,
+        response_json: JSON.stringify({ correct: true }),
+      });
+      expect(migrated.pragma("foreign_key_check")).toEqual([]);
+      migrated
+        .prepare(
+          "INSERT INTO learning_path_events(event_id,schema_version,installation_id,session_id,instance_id,content_id,content_version,kind,created_at,payload) VALUES(?,2,?,?,?,'strategy-open','2','lesson-opened','new-time',?)",
+        )
+        .run(
+          randomUUID(),
+          learningInstallationId.id,
+          randomUUID(),
+          randomUUID(),
+          JSON.stringify({
+            questionOrder: ["generated-question"],
+            selectionReason: "New generated practice.",
+            entryPoint: "repeat",
+            exerciseSeed: 123,
+            generatorVersion: "1",
+          }),
+        );
+      expect(
+        migrated
+          .prepare(
+            "SELECT cursor FROM learning_path_events WHERE content_id='strategy-open'",
+          )
+          .get(),
+      ).toEqual({ cursor: 81 });
     } finally {
       migrated.close();
     }

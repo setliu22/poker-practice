@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type Database from "better-sqlite3";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomInt, randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   startLearningInstanceSchema,
@@ -16,8 +16,13 @@ import {
   getLessonDefinition,
   getPublicQuestion,
   gradeLearningPathAnswer,
+  getScenarioFingerprint,
   selectLearningPathTransfer,
 } from "./learning-path-content.js";
+import {
+  LEARNING_PATH_GENERATOR_VERSION,
+  LEARNING_PATH_TEMPLATE_VERSION,
+} from "./learning-path-generated.js";
 
 type Opened = Extract<LearningPathEvent, { kind: "lesson-opened" }>;
 type EventFact = {
@@ -42,7 +47,13 @@ export function clearLearningPathProgress(db: Database.Database) {
   db.prepare("DELETE FROM learning_path_answer_receipts").run();
   db.prepare("DELETE FROM learning_path_events").run();
 }
-export function learningPathRoutes(db: Database.Database): Router {
+const UINT32_MAX = 0xffff_ffff;
+const UINT32_RANGE = 0x1_0000_0000;
+
+export function learningPathRoutes(
+  db: Database.Database,
+  nextExerciseSeed: () => number = () => randomInt(0, UINT32_RANGE),
+): Router {
   const router = Router();
   function readEvents(): LearningPathEvent[] {
     return (
@@ -67,15 +78,79 @@ export function learningPathRoutes(db: Database.Database): Router {
         e.kind === "lesson-opened" && e.instanceId === instanceId,
     );
     if (!event) throw new PathError(404, "Learning instance not found.");
-    if (!getLessonDefinition(event.contentId, event.contentVersion))
+    const seed = exerciseSeed(event);
+    const generatorVersion =
+      "generatorVersion" in event.payload
+        ? event.payload.generatorVersion
+        : undefined;
+    if (
+      event.contentVersion === "2" &&
+      generatorVersion !== LEARNING_PATH_GENERATOR_VERSION
+    )
+      conflict("This generated practice version is unavailable.");
+    if (!getLessonDefinition(event.contentId, event.contentVersion, seed))
       conflict("This content version is unavailable.");
     return event;
+  }
+  function exerciseSeed(open: Opened): number | undefined {
+    return "exerciseSeed" in open.payload
+      ? open.payload.exerciseSeed
+      : undefined;
+  }
+  function uniqueExerciseSeed(events: LearningPathEvent[]): number {
+    const used = new Set(
+      events.flatMap((event) =>
+        event.kind === "lesson-opened" &&
+        event.schemaVersion === 2 &&
+        "exerciseSeed" in event.payload
+          ? [event.payload.exerciseSeed]
+          : [],
+      ),
+    );
+    let seed = nextExerciseSeed();
+    if (!Number.isInteger(seed) || seed < 0 || seed > UINT32_MAX)
+      throw new PathError(
+        503,
+        "Practice could not be generated. Please retry.",
+      );
+    if (used.size >= UINT32_RANGE)
+      throw new PathError(503, "No new practice scenarios are available.");
+    while (used.has(seed)) seed = seed === UINT32_MAX ? 0 : seed + 1;
+    return seed;
+  }
+  function lessonFor(open: Opened) {
+    return getLessonDefinition(
+      open.contentId,
+      open.contentVersion,
+      exerciseSeed(open),
+    );
+  }
+  function scenarioFingerprint(open: Opened, questionId: string) {
+    const seed = exerciseSeed(open);
+    return seed === undefined
+      ? undefined
+      : getScenarioFingerprint(
+          open.contentId,
+          open.contentVersion,
+          seed,
+          questionId,
+        );
   }
   function fresh(
     questionId: string,
     open: Opened,
     events: LearningPathEvent[],
   ) {
+    const fingerprint = scenarioFingerprint(open, questionId);
+    if (fingerprint !== undefined)
+      return !events.some(
+        (e) =>
+          e.kind === "question-presented" &&
+          e.contentId === open.contentId &&
+          e.contentVersion === open.contentVersion &&
+          "scenarioFingerprint" in e.payload &&
+          e.payload.scenarioFingerprint === fingerprint,
+      );
     return !events.some(
       (e) =>
         e.kind === "question-presented" &&
@@ -89,7 +164,7 @@ export function learningPathRoutes(db: Database.Database): Router {
     events = readEvents(),
   ): LearningPathInstanceState {
     const open = opened(instanceId, events),
-      lesson = getLessonDefinition(open.contentId, open.contentVersion)!;
+      lesson = lessonFor(open)!;
     const own = events.filter((e) => e.instanceId === instanceId);
     const questionIndex = open.payload.questionOrder.findIndex(
       (id) =>
@@ -101,7 +176,12 @@ export function learningPathRoutes(db: Database.Database): Router {
       questionIndex < 0 ? open.payload.questionOrder.length : questionIndex;
     const id = open.payload.questionOrder[index];
     const question = id
-      ? getPublicQuestion(open.contentId, open.contentVersion, id)
+      ? getPublicQuestion(
+          open.contentId,
+          open.contentVersion,
+          id,
+          exerciseSeed(open),
+        )
       : null;
     if (id && !question) conflict("This question version is unavailable.");
     const feedback = own.find(
@@ -142,7 +222,7 @@ export function learningPathRoutes(db: Database.Database): Router {
       | "instanceId"
       | "contentId"
       | "contentVersion"
-    >,
+    > & { schemaVersion: 1 | 2 },
     eventId: string,
     fact: EventFact,
   ) {
@@ -151,7 +231,6 @@ export function learningPathRoutes(db: Database.Database): Router {
       ...open,
       ...fact,
       eventId,
-      schemaVersion: 1,
       cursor: 1,
       createdAt: new Date().toISOString(),
     });
@@ -161,7 +240,7 @@ export function learningPathRoutes(db: Database.Database): Router {
       )
       .run(
         eventId,
-        1,
+        event.schemaVersion,
         event.installationId,
         event.sessionId,
         event.instanceId,
@@ -212,7 +291,15 @@ export function learningPathRoutes(db: Database.Database): Router {
     }
     const today = dayOrdinal(new Date());
     const events = readEvents(),
-      opens = events.filter((e): e is Opened => e.kind === "lesson-opened");
+      opens = events.filter((e): e is Opened => e.kind === "lesson-opened"),
+      catalog = getLearningPathCatalog(),
+      lessons = catalog.units.flatMap((unit) => unit.lessons),
+      currentLessonIds = lessons.map((lesson) => lesson.contentId);
+    const practiceDays = new Set(
+      events
+        .filter((event) => event.kind === "lesson-completed")
+        .map((event) => dayOrdinal(new Date(event.createdAt))),
+    );
     const result: LearningPathProgress = {
       startedLessons: opens.length,
       completedLessons: 0,
@@ -227,16 +314,19 @@ export function learningPathRoutes(db: Database.Database): Router {
       activeInstanceId: null,
       bySkill: {},
       reviewSuggestion: null,
+      recentPracticeDays: Array.from({ length: 7 }, (_, index) => {
+        const ordinal = today - 6 + index;
+        return {
+          date: new Date(ordinal * 86_400_000).toISOString().slice(0, 10),
+          completed: practiceDays.has(ordinal),
+          today: index === 6,
+        };
+      }),
     };
     const completed = new Set(
       events
         .filter((e) => e.kind === "lesson-completed")
         .map((e) => e.instanceId),
-    );
-    const practiceDays = new Set(
-      events
-        .filter((event) => event.kind === "lesson-completed")
-        .map((event) => dayOrdinal(new Date(event.createdAt))),
     );
     result.completedToday = practiceDays.has(today);
     let day = result.completedToday ? today : today - 1;
@@ -249,7 +339,8 @@ export function learningPathRoutes(db: Database.Database): Router {
       ...new Set(
         events
           .filter((e) => e.kind === "lesson-completed")
-          .map((e) => e.contentId),
+          .map((e) => e.contentId)
+          .filter((contentId) => currentLessonIds.includes(contentId)),
       ),
     ];
     result.resumedLessons = new Set(
@@ -293,6 +384,7 @@ export function learningPathRoutes(db: Database.Database): Router {
           { kind: "feedback-generated" }
         > =>
           event.kind === "feedback-generated" &&
+          event.contentVersion === catalog.contentVersion &&
           !event.payload.feedback.correct &&
           events.some(
             (answer) =>
@@ -308,9 +400,6 @@ export function learningPathRoutes(db: Database.Database): Router {
           ),
       )
       .sort((a, b) => b.cursor - a.cursor);
-    const lessons = getLearningPathCatalog().units.flatMap(
-      (unit) => unit.lessons,
-    );
     result.nextLessonContentId =
       lessons.find(
         (lesson) => !result.completedContentIds.includes(lesson.contentId),
@@ -364,34 +453,74 @@ export function learningPathRoutes(db: Database.Database): Router {
             duplicate.instanceId !== body.instanceId ||
             duplicate.sessionId !== body.sessionId ||
             duplicate.contentId !== body.contentId ||
-            duplicate.contentVersion !== body.contentVersion
+            duplicate.contentVersion !== body.contentVersion ||
+            ("entryPoint" in duplicate.payload
+              ? duplicate.payload.entryPoint
+              : undefined) !== body.entryPoint
           )
             conflict("Event ID was reused with changed content.");
           return state(body.instanceId, events);
         }
         if (events.some((e) => e.instanceId === body.instanceId))
           conflict("Instance ID already exists.");
-        const lesson = getLessonDefinition(body.contentId, body.contentVersion);
-        if (!lesson) conflict("Unknown or stale content version.");
-        const seen = events
-          .filter(
-            (e) =>
-              e.kind === "question-presented" &&
-              e.contentId === body.contentId &&
-              e.contentVersion === body.contentVersion,
-          )
-          .map((e) =>
-            e.kind === "question-presented" ? e.payload.questionId : "",
-          );
-        const transfer = selectLearningPathTransfer(
-          body.contentId,
-          body.contentVersion,
-          seen,
+        const catalog = getLearningPathCatalog();
+        const schemaVersion = body.contentVersion === "1" ? 1 : 2;
+        if (
+          schemaVersion === 2 &&
+          body.contentVersion !== catalog.contentVersion
+        )
+          conflict("Unknown or stale content version.");
+        if (schemaVersion === 2 && !body.entryPoint)
+          conflict("Choose how this practice instance was started.");
+        const currentLessonIds = catalog.units.flatMap((unit) =>
+          unit.lessons.map((lesson) => lesson.contentId),
         );
+        if (schemaVersion === 2 && !currentLessonIds.includes(body.contentId))
+          conflict("Unknown or stale content version.");
+        const seed =
+          schemaVersion === 2 ? uniqueExerciseSeed(events) : undefined;
+        let lesson, transfer;
+        try {
+          lesson = getLessonDefinition(
+            body.contentId,
+            body.contentVersion,
+            seed,
+          );
+          if (!lesson) throw new Error("Generated lesson unavailable.");
+          const seen = events
+            .filter(
+              (e) =>
+                e.kind === "question-presented" &&
+                e.contentId === body.contentId &&
+                e.contentVersion === body.contentVersion,
+            )
+            .map((e) =>
+              e.kind === "question-presented" ? e.payload.questionId : "",
+            );
+          transfer = selectLearningPathTransfer(
+            body.contentId,
+            body.contentVersion,
+            seen,
+            seed,
+          );
+        } catch {
+          if (schemaVersion !== 2)
+            throw new PathError(503, "This lesson could not be loaded.");
+          throw new PathError(
+            503,
+            "Practice could not be generated. Please retry.",
+          );
+        }
         const installation = db
           .prepare("SELECT id FROM usage_installation WHERE singleton=1")
           .get() as { id: string };
-        append({ ...body, installationId: installation.id }, body.eventId, {
+        const { entryPoint, ...identity } = body;
+        const open = {
+          ...identity,
+          installationId: installation.id,
+          schemaVersion: schemaVersion as 1 | 2,
+        };
+        append(open, body.eventId, {
           kind: "lesson-opened",
           payload: {
             questionOrder: [
@@ -399,6 +528,13 @@ export function learningPathRoutes(db: Database.Database): Router {
               transfer.questionId,
             ],
             selectionReason: transfer.reason,
+            ...(schemaVersion === 2
+              ? {
+                  entryPoint: entryPoint!,
+                  exerciseSeed: seed!,
+                  generatorVersion: LEARNING_PATH_GENERATOR_VERSION,
+                }
+              : {}),
           },
         });
         return state(body.instanceId);
@@ -449,13 +585,26 @@ export function learningPathRoutes(db: Database.Database): Router {
                 conflict(
                   "Acknowledge feedback before presenting the next question.",
                 );
+              const question = current.question!;
+              const fingerprint = scenarioFingerprint(open, questionId);
+              if (open.schemaVersion === 2 && !fingerprint)
+                throw new PathError(
+                  503,
+                  "This scenario could not be verified. Please retry.",
+                );
               append(open, eventId, {
                 kind: "question-presented",
                 payload: {
                   questionId,
+                  ...(open.schemaVersion === 2
+                    ? {
+                        isTransfer: question.isTransfer,
+                        scenarioFingerprint: fingerprint!,
+                        templateVersion: LEARNING_PATH_TEMPLATE_VERSION,
+                      }
+                    : {}),
                   isFreshTransfer:
-                    !!current.question?.isTransfer &&
-                    fresh(questionId, open, events),
+                    !!question.isTransfer && fresh(questionId, open, events),
                 },
               });
             }
@@ -522,6 +671,7 @@ export function learningPathRoutes(db: Database.Database): Router {
               open.contentVersion,
               questionId,
               body.answer,
+              exerciseSeed(open),
             ),
             response = JSON.stringify(feedback);
           const cursor = append(open, randomUUID(), {

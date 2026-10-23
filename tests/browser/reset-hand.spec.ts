@@ -4,7 +4,7 @@ test("restart hand keeps the same game and restores cards; assistant shortcut is
   request,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.getByRole("button", { name: "Start table", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Your turn", exact: true }),

@@ -75,7 +75,7 @@ for (const rating of fixtures) {
       await route.fulfill({ status: 201, json: completed });
     });
     await page.goto("/");
-    await page.getByRole("button", { name: "Bot table", exact: true }).click();
+    await page.getByRole("button", { name: "Play", exact: true }).click();
     await page
       .getByRole("button", { name: "Start table", exact: true })
       .click();

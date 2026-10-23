@@ -4,7 +4,7 @@ import type { UsageEvent, UsageExport } from "../../packages/shared/src/usage";
 
 async function start(page: Page, players = 2) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Bot table", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   if (players !== 2)
     await page
       .getByLabel("Players, including you")
@@ -236,7 +236,10 @@ test("data controls freeze paged exports, download SQLite backup, and clear usag
   const before = await (await request.get(`/api/tables/${id}`)).json();
   await page.getByText("Local practice data", { exact: true }).click();
   await expect(
-    page.getByText("Saved on this device. Nothing uploaded.", { exact: false }),
+    page.getByText(
+      "Export or delete your recorded decisions and study-aid history.",
+      { exact: true },
+    ),
   ).toBeVisible();
   await page
     .getByText("Local practice data", { exact: true })

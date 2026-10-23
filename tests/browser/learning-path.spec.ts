@@ -1,13 +1,366 @@
-import { test, expect } from "@playwright/test";
+import {
+  test,
+  expect,
+  type Page,
+  type APIRequestContext,
+} from "@playwright/test";
+
+type Lesson = { contentId: string; title: string; skillId: string };
+type Catalog = {
+  pathId: string;
+  contentVersion: string;
+  title: string;
+  units: { id: string; title: string; lessons: Lesson[] }[];
+};
+
+async function getCatalog(request: APIRequestContext): Promise<Catalog> {
+  return (await (await request.get("/api/v1/learning-path")).json()) as Catalog;
+}
+function allLessons(catalog: Catalog): Lesson[] {
+  return catalog.units.flatMap((unit) => unit.lessons);
+}
+function startName(lesson: Lesson) {
+  return "Start " + lesson.title;
+}
+function resumeName(lesson: Lesson) {
+  return "Resume " + lesson.title;
+}
+function repeatName(lesson: Lesson) {
+  return "Repeat " + lesson.title + " (completed)";
+}
+async function pathData(page: Page) {
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Progress", exact: true })
+    .click();
+  await page.getByText("Learning path data", { exact: true }).click();
+}
+async function showLearn(page: Page) {
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Learn", exact: true })
+    .click();
+}
+async function readProgress(request: APIRequestContext) {
+  return (await (
+    await request.get("/api/v1/learning-path/progress")
+  ).json()) as {
+    activeInstanceId: string | null;
+    startedLessons: number;
+    completedContentIds: string[];
+    completedLessons: number;
+    answerAttempts: number;
+    completedToday: boolean;
+    currentStreakDays: number;
+    nextLessonContentId: string | null;
+  };
+}
+async function readInstance(request: APIRequestContext, id: string) {
+  return (await (
+    await request.get("/api/v1/learning-path/instances/" + id)
+  ).json()) as {
+    instanceId: string;
+    contentId: string;
+    contentVersion: string;
+    question: {
+      id: string;
+      title: string;
+      prompt: string;
+      skillId: string;
+      answerKind: "choice" | "percent";
+      choices?: { id: string; label: string }[];
+      assumptions: string[];
+      isTransfer: boolean;
+    } | null;
+    questionIndex: number;
+    totalQuestions: number;
+    feedback: { correct: boolean; explanation: string; skillId: string } | null;
+    complete: boolean;
+  };
+}
+async function chooseAnyAnswer(page: Page) {
+  const choices = page.getByRole("radio");
+  const firstChoice = choices.first();
+  const percent = page.getByRole("spinbutton");
+  await expect(firstChoice.or(percent)).toBeVisible();
+  if ((await choices.count()) > 0) {
+    await choices.first().check();
+  } else {
+    await percent.fill("50");
+  }
+}
+async function answerCurrentQuestion(page: Page) {
+  await chooseAnyAnswer(page);
+  await page
+    .getByRole("button", { name: "Submit answer", exact: true })
+    .click();
+  await expect(
+    page.getByRole("region", { name: "Path feedback" }),
+  ).toBeVisible();
+}
+async function finishCurrentLesson(page: Page, request: APIRequestContext) {
+  const progress = await readProgress(request);
+  if (!progress.activeInstanceId) throw new Error("No active strategy skill.");
+  let state = await readInstance(request, progress.activeInstanceId);
+  while (state.question) {
+    await answerCurrentQuestion(page);
+    await page
+      .getByRole("button", { name: "Continue lesson", exact: true })
+      .click();
+    state = await readInstance(request, state.instanceId);
+  }
+  await expect(
+    page.getByRole("heading", { name: "Lesson complete", exact: true }),
+  ).toBeVisible();
+  return state;
+}
+async function openedEvent(request: APIRequestContext, instanceId: string) {
+  const data = await (await request.get("/api/v1/learning-path/export")).json();
+  return data.events.find(
+    (event: { kind: string; instanceId: string }) =>
+      event.kind === "lesson-opened" && event.instanceId === instanceId,
+  );
+}
 
 test.beforeEach(async ({ request }) => {
   await request.delete("/api/v1/learning-path/progress");
 });
 
-test("today's practice starts a lesson, resumes it, and keeps completion through reload", async ({
+test("navigation keeps aligned icons and labels inside evenly sized buttons", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  for (const width of [300, 320, 480, 640, 800, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    const buttons = nav.getByRole("button");
+    await expect(buttons).toHaveCount(5);
+    const first = (await buttons.first().boundingBox())!;
+    for (const button of await buttons.all()) {
+      const bounds = (await button.boundingBox())!;
+      const icon = (await button.locator("svg").boundingBox())!;
+      const label = (await button.locator("span").boundingBox())!;
+      expect(
+        label.x - icon.x - icon.width,
+        "icon gap at " + width + "px",
+      ).toBeGreaterThanOrEqual(7);
+      expect(
+        label.x + label.width,
+        "label fits button at " + width + "px",
+      ).toBeLessThanOrEqual(bounds.x + bounds.width - 6);
+      expect(label.height).toBeLessThan(26);
+      expect(
+        Math.abs(bounds.width - first.width),
+        "equal button widths at " + width + "px",
+      ).toBeLessThan(1);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+    }
+    if (width === 300)
+      await page.screenshot({
+        path: test.info().outputPath("narrow-navigation.png"),
+      });
+  }
+});
+
+test("daily practice stays readable when the browser panel is narrowed", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const card = page.getByRole("region", {
+    name: "Today's practice",
+    exact: true,
+  });
+  const title = card.getByRole("heading", {
+    name: "Today's practice",
+    exact: true,
+  });
+  const button = card.getByRole("button", {
+    name: "Start today's practice",
+    exact: true,
+  });
+  for (const width of [320, 480, 640, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(button).toBeVisible();
+    const heading = (await title.boundingBox())!;
+    const bounds = (await card.boundingBox())!;
+    const action = (await button.boundingBox())!;
+    expect(heading.width, "heading width at " + width + "px").toBeGreaterThan(
+      140,
+    );
+    expect(heading.height, "heading height at " + width + "px").toBeLessThan(
+      60,
+    );
+    expect(action.x).toBeGreaterThanOrEqual(bounds.x);
+    expect(action.x + action.width).toBeLessThanOrEqual(
+      bounds.x + bounds.width,
+    );
+    expect(bounds.height).toBeLessThan(360);
+    if (width === 320)
+      await page.screenshot({
+        path: test.info().outputPath("narrow-browser-card.png"),
+        fullPage: true,
+      });
+  }
+});
+
+test("Learn presents generated strategy skills and keeps supporting tools in their tabs", async ({
   page,
   request,
 }) => {
+  const catalog = await getCatalog(request);
+  const lessons = allLessons(catalog);
+  const expectedIds = [
+    "strategy-preflop",
+    "strategy-equity",
+    "strategy-postflop",
+    "strategy-ranges",
+    "strategy-betting",
+  ];
+  expect(lessons.map((lesson) => lesson.contentId).sort()).toEqual(
+    [...expectedIds].sort(),
+  );
+  expect(new Set(lessons.map((lesson) => lesson.contentId)).size).toBe(5);
+
+  await page.goto("/");
+  const home = page.getByRole("region", {
+    name: "Poker strategy practice",
+    exact: true,
+  });
+  await expect(
+    page.getByRole("heading", { name: "Poker strategy", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Start today's practice", exact: true }),
+  ).toBeEnabled();
+  await expect(home).toContainText("Fresh situations each session");
+  await expect(home.locator("button.primary")).toHaveCount(1);
+  const path = home.getByRole("list", { name: "Strategy skills", exact: true });
+  await expect(path.getByRole("button")).toHaveCount(5);
+  for (const lesson of lessons) {
+    await expect(
+      path.getByRole("button", { name: startName(lesson), exact: true }),
+    ).toBeVisible();
+    expect((lesson.contentId + " " + lesson.title).toLowerCase()).not.toMatch(
+      /table-flow|legal action|poker rules|hand-rankings|five-card hand/,
+    );
+  }
+  await expect(
+    home.getByRole("region", { name: "Recommended next lesson" }),
+  ).toHaveCount(0);
+  await expect(
+    home.getByRole("region", { name: "Fresh transfer results" }),
+  ).toHaveCount(0);
+  await expect(
+    home.getByText(/answers attempted|mistakes to learn from/),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Open online cash Decision Lab" }),
+  ).toHaveCount(0);
+
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Progress", exact: true }).click();
+  const progress = page.getByRole("region", {
+    name: "Learning path progress",
+    exact: true,
+  });
+  await expect(progress).toContainText(
+    "0 lessons completed · 0 answers attempted",
+  );
+
+  await nav.getByRole("button", { name: "Practice", exact: true }).click();
+  const cash = page.getByRole("button", {
+    name: "Open online cash Decision Lab",
+    exact: true,
+  });
+  await cash.click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Online cash Decision Lab",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole("heading", {
+      name: "Online cash Decision Lab",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Back to practice", exact: true })
+    .click();
+  await expect(cash).toBeFocused();
+  await expect(
+    page.getByRole("region", { name: "Current exercise" }),
+  ).toBeVisible();
+
+  await nav.getByRole("button", { name: "Reference", exact: true }).click();
+  await page
+    .getByRole("searchbox", { name: "Find a concept" })
+    .fill("pot odds");
+  await expect(
+    page.getByRole("heading", { name: "Pot odds", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("searchbox", { name: "Find a concept" }).fill("");
+  await page.getByText("Opening charts", { exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Preflop opening charts", exact: true }),
+  ).toBeVisible();
+  const walkthrough = page.getByRole("button", {
+    name: "Open preflop walkthrough",
+    exact: true,
+  });
+  await walkthrough.click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Watch the action reach you",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page
+    .getByText("More practice and earlier lessons", { exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Open earlier exercises", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Should I bet or check?", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Back to reference", exact: true })
+    .click();
+  await expect(walkthrough).toBeFocused();
+  await page
+    .getByRole("button", { name: "Open legacy lessons", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", {
+      name: "Open all-in decision practice",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Back to reference", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Open legacy lessons", exact: true }),
+  ).toBeFocused();
+  await page.screenshot({
+    path: test.info().outputPath("reference-destinations.png"),
+    fullPage: true,
+  });
+  await nav.getByRole("button", { name: "Learn", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Start today's practice", exact: true }),
+  ).toBeEnabled();
+});
+
+test("daily practice starts a seeded strategy skill and replays the same private-safe question until submission", async ({
+  page,
+  request,
+}) => {
+  const catalog = await getCatalog(request);
+  const first = allLessons(catalog)[0]!;
   await page.goto("/");
   const daily = page.getByRole("region", {
     name: "Today's practice",
@@ -15,148 +368,182 @@ test("today's practice starts a lesson, resumes it, and keeps completion through
   });
   await expect(daily).toContainText("Not completed today");
   await expect(daily).toContainText("0-day practice streak");
-  await expect(daily).toContainText("does not measure poker skill");
+  await expect(daily).toContainText(first.title);
   await daily
     .getByRole("button", { name: "Start today's practice", exact: true })
-    .focus();
-  await page.keyboard.press("Enter");
-  await expect(
-    page.getByRole("heading", { name: "No bet to match", exact: true }),
-  ).toBeFocused();
-  await page.reload();
-  await expect(
-    page.getByRole("heading", { name: "No bet to match", exact: true }),
-  ).toBeFocused();
-  await expect(
-    daily.getByRole("button", { name: "Resume today's practice", exact: true }),
-  ).toBeEnabled();
-  await daily
-    .getByRole("button", { name: "Resume today's practice", exact: true })
     .click();
-  for (const name of [
-    "Check",
-    "Call 10",
-    "30 total",
-    "Deal the three-card flop",
-    "Check",
-  ]) {
-    await page.getByRole("radio", { name, exact: true }).check();
-    await page
-      .getByRole("button", { name: "Submit answer", exact: true })
-      .click();
-    await expect(
-      page.getByRole("region", { name: "Path feedback" }),
-    ).toBeVisible();
-    await page
-      .getByRole("button", { name: "Continue lesson", exact: true })
-      .click();
-  }
+
+  const progress = await readProgress(request);
+  expect(progress.activeInstanceId).toBeTruthy();
+  const initial = await readInstance(request, progress.activeInstanceId!);
+  expect(initial.contentId).toBe(first.contentId);
+  expect(initial.question).not.toBeNull();
+  expect(initial.feedback).toBeNull();
+  const before = initial.question!;
+  expect(before.skillId).toBe(first.skillId);
+  expect(JSON.stringify(before)).not.toMatch(
+    /correctAnswer|gradingRule|explanation|takeaway/,
+  );
   await expect(
-    page.getByRole("heading", { name: "Lesson complete", exact: true }),
-  ).toBeVisible();
-  await expect(daily).toContainText("Completed today");
-  await expect(daily).toContainText("1-day practice streak");
-  await page.getByRole("button", { name: "Back to path", exact: true }).click();
-  const progressRead = page.waitForRequest(
-    (req) =>
-      req.method() === "GET" && req.url().includes("/learning-path/progress?"),
+    page.getByRole("heading", { name: before.title, exact: true }),
+  ).toBeFocused();
+  await expect(page.getByRole("region", { name: "Path feedback" })).toHaveCount(
+    0,
   );
+  const opened = await openedEvent(request, initial.instanceId);
+  expect(opened.schemaVersion).toBe(2);
+  expect(opened.payload).toMatchObject({
+    entryPoint: "daily-recommendation",
+    generatorVersion: expect.any(String),
+    exerciseSeed: expect.any(Number),
+  });
+
+  await page
+    .getByRole("button", { name: "Back to course", exact: false })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Poker strategy", exact: true }),
+  ).toBeFocused();
+  const resume = page.getByRole("button", {
+    name: resumeName(first),
+    exact: true,
+  });
+  await expect(resume).toContainText("In progress");
+  await expect(resume).toHaveAttribute("aria-current", "step");
+  await resume.click();
+  await expect(
+    page.getByRole("heading", { name: before.title, exact: true }),
+  ).toBeFocused();
+  expect((await readInstance(request, initial.instanceId)).question).toEqual(
+    before,
+  );
+  await expect(page.getByRole("region", { name: "Path feedback" })).toHaveCount(
+    0,
+  );
+
   await page.reload();
-  const read = await progressRead;
-  const zone = await page.evaluate(
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+  await expect(
+    page.getByRole("heading", { name: before.title, exact: true }),
+  ).toBeFocused();
+  expect((await readInstance(request, initial.instanceId)).question).toEqual(
+    before,
   );
-  expect(new URL(read.url()).searchParams.get("timeZone")).toBe(zone);
-  await expect(daily).toContainText("Completed today");
-  await expect(daily).toContainText("1-day practice streak");
-  await expect(daily).toContainText("Build the best five-card hand");
-  expect(
-    (await (await request.get("/api/v1/learning-path/progress")).json())
-      .completedLessons,
-  ).toBe(1);
+  await expect(page.getByRole("region", { name: "Path feedback" })).toHaveCount(
+    0,
+  );
+
+  await answerCurrentQuestion(page);
+  await expect(
+    page.getByRole("heading", { name: /^(Correct|Try this idea again)$/ }),
+  ).toBeVisible();
+  const events = (
+    await (await request.get("/api/v1/learning-path/export")).json()
+  ).events;
+  const ownEvents = events.filter(
+    (event: { instanceId: string }) => event.instanceId === initial.instanceId,
+  );
+  const feedbackEvent = ownEvents.find(
+    (event: { kind: string; payload: { questionId?: string } }) =>
+      event.kind === "feedback-generated" &&
+      event.payload.questionId === before.id,
+  );
+  expect(feedbackEvent?.payload).toMatchObject({ questionId: before.id });
+  expect(feedbackEvent?.payload.feedback).toBeTruthy();
+  await expect(
+    page.getByRole("region", { name: "Path feedback" }),
+  ).toContainText(feedbackEvent!.payload.feedback.explanation);
+  const kinds = ownEvents.map((event: { kind: string }) => event.kind);
+  expect(kinds).toContain("answer-submitted");
+  expect(kinds).toContain("feedback-generated");
+  expect(kinds.indexOf("answer-submitted")).toBeLessThan(
+    kinds.indexOf("feedback-generated"),
+  );
 });
 
 test.describe("daily status freshness", () => {
   test.use({ timezoneId: "America/New_York" });
   for (const newerResult of ["failure", "success"] as const) {
-    test(`delayed initial progress remains usable after a newer ${newerResult}`, async ({
-      page,
-    }) => {
-      let releaseInitial!: () => void;
-      const released = new Promise<void>((resolve) => {
-        releaseInitial = resolve;
-      });
-      let holdInitial!: () => void;
-      const held = new Promise<void>((resolve) => {
-        holdInitial = resolve;
-      });
-      let reads = 0;
-      await page.route(
-        /\/api\/v1\/learning-path\/progress\?/,
-        async (route) => {
-          const read = ++reads;
-          if (read === 1) {
-            const response = await route.fetch();
-            const summary = await response.json();
-            holdInitial();
-            await released;
-            await route.fulfill({
-              response,
-              json: { ...summary, completedToday: true, currentStreakDays: 2 },
-            });
-          } else if (newerResult === "failure") {
-            await route.fulfill({
-              status: 503,
-              json: { error: "Temporary focus refresh failure" },
-            });
-          } else {
-            const response = await route.fetch();
-            await route.fulfill({
-              response,
-              json: {
-                ...(await response.json()),
-                completedToday: false,
-                currentStreakDays: 5,
-                answerAttempts: 9,
-              },
-            });
-          }
-        },
-      );
-      await page.goto("/");
-      await held;
-      const focusResponse = page.waitForResponse((response) =>
-        response.url().includes("/learning-path/progress?"),
-      );
-      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-      expect((await focusResponse).status()).toBe(
-        newerResult === "failure" ? 503 : 200,
-      );
-      if (newerResult === "success")
-        await expect(page.getByText(/9 answers attempted/)).toBeVisible();
-      releaseInitial();
-      const daily = page.getByRole("region", {
-        name: "Today's practice",
-        exact: true,
-      });
-      await expect(daily).toBeVisible();
-      await expect(daily).toContainText(
-        newerResult === "failure" ? "Completed today" : "Not completed today",
-      );
-      await expect(daily).toContainText(
-        newerResult === "failure"
-          ? "2-day practice streak"
-          : "5-day practice streak",
-      );
-      await expect(
-        page.getByRole("button", {
-          name: "Start Table flow and legal actions",
+    test(
+      "delayed initial progress remains usable after a newer " + newerResult,
+      async ({ page }) => {
+        let releaseInitial!: () => void;
+        const released = new Promise<void>((resolve) => {
+          releaseInitial = resolve;
+        });
+        let holdInitial!: () => void;
+        const held = new Promise<void>((resolve) => {
+          holdInitial = resolve;
+        });
+        let reads = 0;
+        await page.route(
+          /\/api\/v1\/learning-path\/progress\?/,
+          async (route) => {
+            const read = ++reads;
+            if (read === 1) {
+              const response = await route.fetch();
+              const summary = await response.json();
+              holdInitial();
+              await released;
+              await route.fulfill({
+                response,
+                json: {
+                  ...summary,
+                  completedToday: true,
+                  currentStreakDays: 2,
+                },
+              });
+            } else if (newerResult === "failure") {
+              await route.fulfill({
+                status: 503,
+                json: { error: "Temporary focus refresh failure" },
+              });
+            } else {
+              const response = await route.fetch();
+              await route.fulfill({
+                response,
+                json: {
+                  ...(await response.json()),
+                  completedToday: false,
+                  currentStreakDays: 5,
+                },
+              });
+            }
+          },
+        );
+        await page.goto("/");
+        await held;
+        const focusResponse = page.waitForResponse((response) =>
+          response.url().includes("/learning-path/progress?"),
+        );
+        await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+        expect((await focusResponse).status()).toBe(
+          newerResult === "failure" ? 503 : 200,
+        );
+        releaseInitial();
+        const daily = page.getByRole("region", {
+          name: "Today's practice",
           exact: true,
-        }),
-      ).toBeEnabled();
-      if (newerResult === "success")
-        await expect(page.getByText(/9 answers attempted/)).toBeVisible();
-    });
+        });
+        await expect(daily).toBeVisible();
+        await expect(daily).toContainText(
+          newerResult === "failure" ? "Completed today" : "Not completed today",
+        );
+        await expect(daily).toContainText(
+          newerResult === "failure"
+            ? "2-day practice streak"
+            : "5-day practice streak",
+        );
+        await expect(
+          page.getByRole("button", {
+            name:
+              newerResult === "failure"
+                ? "Practice another lesson"
+                : "Start today's practice",
+            exact: true,
+          }),
+        ).toBeEnabled();
+      },
+    );
   }
   test("refreshes at local midnight across DST and on return to the tab", async ({
     page,
@@ -188,17 +575,15 @@ test.describe("daily status freshness", () => {
     });
     await expect(daily).toContainText("Completed today");
     await expect(daily).toContainText("3-day practice streak");
-    const start = page.getByRole("button", {
-      name: "Start Table flow and legal actions",
-      exact: true,
-    });
-    await start.focus();
+    const action = daily.locator("button.primary");
+    await expect(action).toHaveText("Practice another lesson");
+    await action.focus();
     dailyState = { completedToday: false, currentStreakDays: 3 };
     await page.clock.runFor(10_000);
     await expect(daily).toContainText("Not completed today");
     await expect(daily).toContainText("3-day practice streak");
-    await expect(start).toBeFocused();
-    // November 1 has 25 local hours. A fixed 24-hour timer fires too early.
+    await expect(action).toHaveText("Start today's practice");
+    await expect(action).toBeFocused();
     const afterMidnight = progressReads.length;
     dailyState = { completedToday: false, currentStreakDays: 0 };
     await page.clock.fastForward(24 * 60 * 60 * 1000);
@@ -214,7 +599,7 @@ test.describe("daily status freshness", () => {
       document.dispatchEvent(new Event("visibilitychange")),
     );
     await expect(daily).toContainText("Not completed today");
-    await expect(start).toBeFocused();
+    await expect(action).toBeFocused();
     failRefresh = true;
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect(daily.getByRole("alert")).toContainText("may be out of date");
@@ -234,128 +619,84 @@ test.describe("daily status freshness", () => {
   });
 });
 
-test("course home preserves completed lessons and recommends the next unfinished lesson after repeats and reload", async ({
+test("completing a generated skill updates next practice and the local streak; repeating it generates a new scenario", async ({
   page,
   request,
 }) => {
+  const catalog = await getCatalog(request);
+  const lessons = allLessons(catalog);
+  const first = lessons[0]!;
   await page.goto("/");
-  const recommendation = page.getByRole("region", {
-    name: "Recommended next lesson",
+  const daily = page.getByRole("region", {
+    name: "Today's practice",
     exact: true,
   });
-  await expect(recommendation).toContainText("Table flow and legal actions");
-  const instances: string[] = [];
-  for (let attempt = 0; attempt < 2; attempt++) {
-    await page
-      .getByRole("button", {
-        name: "Start Table flow and legal actions",
-        exact: true,
-      })
-      .click();
-    const progress = await (
-      await request.get("/api/v1/learning-path/progress")
-    ).json();
-    instances.push(progress.activeInstanceId);
-    for (const name of [
-      "Check",
-      "Call 10",
-      "30 total",
-      "Deal the three-card flop",
-      attempt === 0 ? "Check" : "Fold, call, or make a legal raise",
-    ]) {
-      await page.getByRole("radio", { name, exact: true }).check();
-      await page
-        .getByRole("button", { name: "Submit answer", exact: true })
-        .click();
-      await expect(
-        page.getByRole("region", { name: "Path feedback" }),
-      ).toBeVisible();
-      await page
-        .getByRole("button", { name: "Continue lesson", exact: true })
-        .click();
-    }
-    await expect(
-      page.getByRole("heading", { name: "Lesson complete", exact: true }),
-    ).toBeVisible();
-    await page
-      .getByRole("button", { name: "Back to path", exact: true })
-      .click();
-    await page.reload();
-    await expect(
-      page.getByRole("note", {
-        name: "Completed Table flow and legal actions",
-        exact: true,
-      }),
-    ).toBeVisible();
-    await expect(recommendation).toContainText("Build the best five-card hand");
-    await expect(
-      page.getByText("1 of 5 lessons completed", { exact: true }),
-    ).toBeVisible();
-    const after = await (
-      await request.get("/api/v1/learning-path/progress")
-    ).json();
-    expect(after).toMatchObject({
-      completedLessons: attempt + 1,
-      completedContentIds: ["table-flow"],
-      nextLessonContentId: "hand-rankings",
-    });
-  }
-  expect(new Set(instances).size).toBe(2);
+  await expect(daily).toContainText(first.title);
   await page
-    .getByRole("button", {
-      name: "Continue with Build the best five-card hand",
-      exact: true,
-    })
+    .getByRole("button", { name: "Start today's practice", exact: true })
     .click();
-  await expect(
-    page.getByRole("heading", { name: "Count both pairs", exact: true }),
-  ).toBeFocused();
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= innerWidth,
-    ),
-  ).toBe(true);
+  const firstInstance = (await readProgress(request)).activeInstanceId!;
+  const firstState = await readInstance(request, firstInstance);
+  const firstOpen = await openedEvent(request, firstInstance);
+
+  await finishCurrentLesson(page, request);
+  await page.getByRole("button", { name: "Back to path", exact: true }).click();
+  await expect(daily).toContainText("Completed today");
+  await expect(daily).toContainText("1-day practice streak");
+  await expect(daily).toContainText(lessons[1]!.title);
+  const progressRead = page.waitForRequest(
+    (req) =>
+      req.method() === "GET" && req.url().includes("/learning-path/progress?"),
+  );
+  await page.reload();
+  const read = await progressRead;
+  const zone = await page.evaluate(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+  );
+  expect(new URL(read.url()).searchParams.get("timeZone")).toBe(zone);
+  await expect(daily).toContainText("Completed today");
+  await expect(daily).toContainText("1-day practice streak");
+
+  await page
+    .getByRole("button", { name: repeatName(first), exact: true })
+    .click();
+  const secondInstance = (await readProgress(request)).activeInstanceId!;
+  const secondState = await readInstance(request, secondInstance);
+  const secondOpen = await openedEvent(request, secondInstance);
+  expect(secondInstance).not.toBe(firstInstance);
+  expect(secondState.contentId).toBe(first.contentId);
+  expect(secondOpen.payload.exerciseSeed).not.toBe(
+    firstOpen.payload.exerciseSeed,
+  );
+  expect(secondState.question).not.toEqual(firstState.question);
 });
 
-test("beginner lesson preserves a committed answer retry, resumes, reviews and clears only its path", async ({
+test("saved answers retry with the same id, resume, export, and clear only strategy-path data", async ({
   page,
   request,
 }) => {
-  await page.setViewportSize({ width: 320, height: 800 });
   const legacy = await (await request.get("/api/learning/progress")).json();
+  const first = allLessons(await getCatalog(request))[0]!;
   await page.goto("/");
-  await expect(
-    page.getByRole("heading", { name: "Poker foundations", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText(/Legacy.*incomplete history/)).toBeVisible();
   await page
-    .getByRole("button", { name: "Start Table flow and legal actions" })
+    .getByRole("button", { name: startName(first), exact: true })
     .focus();
   await page.keyboard.press("Enter");
+  const initial = await readInstance(
+    request,
+    (await readProgress(request)).activeInstanceId!,
+  );
+  const question = initial.question!;
   await expect(
-    page.getByRole("heading", { name: "No bet to match", exact: true }),
+    page.getByRole("heading", { name: question.title, exact: true }),
   ).toBeFocused();
-  await expect(page.getByRole("region", { name: "Path feedback" })).toHaveCount(
-    0,
+  expect(initial.feedback).toBeNull();
+  expect(JSON.stringify(question)).not.toMatch(
+    /correctAnswer|gradingRule|explanation|takeaway/,
   );
-  const progress = await (
-    await request.get("/api/v1/learning-path/progress")
-  ).json();
-  const instance = await (
-    await request.get(
-      `/api/v1/learning-path/instances/${progress.activeInstanceId}`,
-    )
-  ).json();
-  expect(instance.feedback).toBeNull();
-  expect(JSON.stringify(instance.question)).not.toMatch(
-    /correctAnswer|explanation|takeaway/,
-  );
-  await page.screenshot({
-    path: test.info().outputPath("path-question.png"),
-    fullPage: true,
-  });
-  const commands: unknown[] = [],
-    receipts: string[] = [];
+
+  const commands: unknown[] = [];
+  const receipts: string[] = [];
   await page.route(
     "**/api/v1/learning-path/instances/*/questions/*/answers",
     async (route) => {
@@ -366,15 +707,30 @@ test("beginner lesson preserves a committed answer retry, resumes, reviews and c
       else await route.fulfill({ response });
     },
   );
-  await page.getByRole("radio", { name: "Fold", exact: true }).focus();
-  await page.keyboard.press("Space");
+  await chooseAnyAnswer(page);
   await page
     .getByRole("button", { name: "Submit answer", exact: true })
-    .focus();
-  await page.keyboard.press("Enter");
+    .click();
   await expect(
     page.getByRole("button", { name: "Retry saved answer" }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Back to course", exact: false })
+    .click();
+  await page
+    .getByRole("button", { name: "Resume today's practice", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Retry saved answer" }),
+  ).toBeVisible();
+  const answerField =
+    question.answerKind === "choice"
+      ? page.getByRole("radio").first()
+      : page.getByRole("spinbutton");
+  await expect(answerField).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Retry saved answer", exact: true }),
+  ).toBeEnabled();
   await page.reload();
   await expect(
     page.getByRole("button", { name: "Retry saved answer" }),
@@ -382,78 +738,73 @@ test("beginner lesson preserves a committed answer retry, resumes, reviews and c
   await page.getByRole("button", { name: "Retry saved answer" }).click();
   await expect(
     page.getByRole("region", { name: "Path feedback" }),
-  ).toContainText("Try this idea again");
+  ).toBeVisible();
   expect(commands).toHaveLength(2);
   expect(commands[1]).toEqual(commands[0]);
   expect(receipts[1]).toBe(receipts[0]);
+
   await page.getByRole("button", { name: "Continue lesson" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Match a bet", exact: true }),
-  ).toBeVisible();
+  const nextState = await readInstance(request, initial.instanceId);
+  if (nextState.question)
+    await expect(
+      page.getByRole("heading", {
+        name: nextState.question.title,
+        exact: true,
+      }),
+    ).toBeFocused();
   await page.evaluate(() => localStorage.removeItem("poker-learning-path-v1"));
   await page.reload();
-  await expect(
-    page.getByRole("heading", { name: "Match a bet", exact: true }),
-  ).toBeFocused();
-  for (const name of [
-    "Call 10",
-    "30 total",
-    "Deal the three-card flop",
-    "Check",
-  ]) {
-    await page.getByRole("radio", { name, exact: true }).check();
-    await page
-      .getByRole("button", { name: "Submit answer", exact: true })
-      .click();
+  const recovered = await readInstance(request, initial.instanceId);
+  expect(recovered.question).toEqual(nextState.question);
+  if (recovered.question)
     await expect(
-      page.getByRole("region", { name: "Path feedback" }),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "Continue lesson" }).click();
-  }
-  await expect(
-    page.getByRole("heading", { name: "Lesson complete", exact: true }),
-  ).toBeVisible();
+      page.getByRole("heading", {
+        name: recovered.question.title,
+        exact: true,
+      }),
+    ).toBeFocused();
+
+  await finishCurrentLesson(page, request);
   await page.screenshot({
-    path: test.info().outputPath("path-complete.png"),
+    path: test.info().outputPath("strategy-skill-complete.png"),
     fullPage: true,
   });
-  await expect(
-    page.getByRole("button", { name: "Review missed ideas" }),
-  ).toBeVisible();
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= innerWidth,
-    ),
-  ).toBe(true);
-  const events = await (
+  const exported = await (
     await request.get("/api/v1/learning-path/export")
   ).json();
-  const kinds = events.events.map((e: { kind: string }) => e.kind);
+  const instanceEvents = exported.events.filter(
+    (event: { instanceId: string }) => event.instanceId === initial.instanceId,
+  );
+  const kinds = instanceEvents.map((event: { kind: string }) => event.kind);
   expect(kinds.indexOf("question-presented")).toBeLessThan(
     kinds.indexOf("answer-submitted"),
   );
   expect(kinds.indexOf("feedback-generated")).toBeLessThan(
     kinds.indexOf("feedback-shown"),
   );
-  expect(kinds.filter((k: string) => k === "lesson-completed")).toHaveLength(1);
+  expect(
+    kinds.filter((kind: string) => kind === "lesson-completed"),
+  ).toHaveLength(1);
   expect(kinds).toContain("lesson-resumed");
+
   const completedCheckpoint = await page.evaluate(() =>
     localStorage.getItem("poker-learning-path-v1"),
   );
   await page.getByRole("button", { name: "Back to path", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("heading", { name: "Poker foundations", exact: true }),
+    page.getByRole("heading", { name: "Poker strategy", exact: true }),
   ).toBeFocused();
   await page.evaluate(
     (value) => localStorage.setItem("poker-learning-path-v1", value!),
     completedCheckpoint,
   );
   await page.reload();
-  await page.getByRole("button", { name: "Review missed ideas" }).click();
   await expect(
-    page.getByRole("heading", { name: "No bet to match", exact: true }),
+    page.getByRole("heading", { name: "Lesson complete", exact: true }),
   ).toBeVisible();
+
+  await pathData(page);
   const trigger = page.getByRole("button", {
     name: "Clear path progress",
     exact: true,
@@ -462,25 +813,26 @@ test("beginner lesson preserves a committed answer retry, resumes, reviews and c
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(trigger).toBeFocused();
-  expect(
-    (await (await request.get("/api/v1/learning-path/progress")).json())
-      .answerAttempts,
-  ).toBe(5);
+  expect((await readProgress(request)).answerAttempts).toBeGreaterThan(0);
   await trigger.click();
   await page
     .getByRole("button", { name: "Confirm clear path progress" })
     .click();
-  await expect(page.getByText("0 answers attempted")).toBeVisible();
+  await expect(
+    page.getByText(/0 lessons completed.*0 answers attempted/),
+  ).toBeVisible();
   await expect(trigger).toBeFocused();
   expect(await (await request.get("/api/learning/progress")).json()).toEqual(
     legacy,
   );
 });
 
-test("acknowledgements retry their saved IDs and stale reload keeps the entered answer", async ({
+test("acknowledgements retry their saved IDs and stale reload preserves a dynamic answer", async ({
   page,
+  request,
 }) => {
   await page.goto("/");
+  const first = allLessons(await getCatalog(request))[0]!;
   const presentations: unknown[] = [];
   await page.route("**/questions/*/presented", async (route) => {
     presentations.push(route.request().postDataJSON());
@@ -489,14 +841,26 @@ test("acknowledgements retry their saved IDs and stale reload keeps the entered 
     else await route.fulfill({ response });
   });
   await page
-    .getByRole("button", { name: "Start Table flow and legal actions" })
+    .getByRole("button", { name: startName(first), exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Back to course", exact: false })
+    .click();
+  await page
+    .getByRole("button", { name: "Resume today's practice", exact: true })
     .click();
   await expect(page.getByRole("alert")).toBeVisible();
   await page.getByRole("button", { name: "Try again", exact: true }).click();
-  await expect(
-    page.getByRole("radio", { name: "Check", exact: true }),
-  ).toBeEnabled();
+  const state = await readInstance(
+    request,
+    (await readProgress(request)).activeInstanceId!,
+  );
+  if (state.question?.answerKind === "choice")
+    await expect(page.getByRole("radio").first()).toBeEnabled();
+  else await expect(page.getByRole("spinbutton")).toBeEnabled();
   expect(presentations[1]).toEqual(presentations[0]);
+
   const answers: unknown[] = [];
   await page.route("**/questions/*/answers", async (route) => {
     answers.push(route.request().postDataJSON());
@@ -507,7 +871,7 @@ test("acknowledgements retry their saved IDs and stale reload keeps the entered 
       });
     else await route.continue();
   });
-  await page.getByRole("radio", { name: "Check", exact: true }).check();
+  await chooseAnyAnswer(page);
   await page
     .getByRole("button", { name: "Submit answer", exact: true })
     .click();
@@ -515,9 +879,12 @@ test("acknowledgements retry their saved IDs and stale reload keeps the entered 
     "Your saved answer is preserved",
   );
   await page.getByRole("button", { name: "Reload current lesson" }).click();
-  await expect(
-    page.getByRole("radio", { name: "Check", exact: true }),
-  ).toBeChecked();
+  const current = await readInstance(request, state.instanceId);
+  if (current.question?.answerKind === "choice") {
+    await expect(page.getByRole("radio").first()).toBeChecked();
+  } else {
+    await expect(page.getByRole("spinbutton")).toHaveValue("50");
+  }
   const shown: unknown[] = [];
   await page.route("**/questions/*/feedback-shown", async (route) => {
     shown.push(route.request().postDataJSON());
@@ -542,23 +909,29 @@ test("explicit JSON download follows all pages at a pinned export cursor", async
   page,
   request,
 }) => {
-  const catalog = await (await request.get("/api/v1/learning-path")).json();
+  const catalog = await getCatalog(request);
   async function open() {
     return request.post("/api/v1/learning-path/instances", {
       data: {
         eventId: crypto.randomUUID(),
         instanceId: crypto.randomUUID(),
         sessionId: crypto.randomUUID(),
-        contentId: catalog.units[0].lessons[0].contentId,
+        contentId: allLessons(catalog)[0]!.contentId,
         contentVersion: catalog.contentVersion,
+        entryPoint: "path-selection",
       },
     });
   }
-  for (let i = 0; i < 103; i++) await open();
+  for (let i = 0; i < 103; i++) {
+    const response = await open();
+    expect(response.ok()).toBeTruthy();
+  }
   await page.goto("/");
+  const active = (await readProgress(request)).activeInstanceId!;
+  const question = (await readInstance(request, active)).question!;
   await expect(
-    page.getByRole("heading", { name: "No bet to match", exact: true }),
-  ).toBeVisible();
+    page.getByRole("heading", { name: question.title, exact: true }),
+  ).toBeFocused();
   const pages: {
     url: string;
     data: { throughCursor: number; events: { cursor: number }[] };
@@ -569,16 +942,17 @@ test("explicit JSON download follows all pages at a pinned export cursor", async
     if (pages.length === 1) await open();
     await route.fulfill({ response });
   });
+  await pathData(page);
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download path data" }).click();
   const download = await downloadPromise;
   const { readFile } = await import("node:fs/promises");
   const exported = JSON.parse(await readFile((await download.path())!, "utf8"));
   expect(pages).toHaveLength(2);
-  expect(new URL(pages[1].url).searchParams.get("throughCursor")).toBe(
-    String(pages[0].data.throughCursor),
+  expect(new URL(pages[1]!.url).searchParams.get("throughCursor")).toBe(
+    String(pages[0]!.data.throughCursor),
   );
-  expect(exported.events).toEqual(pages.flatMap((p) => p.data.events));
+  expect(exported.events).toEqual(pages.flatMap((page) => page.data.events));
   expect(
     exported.events.every(
       (event: { cursor: number }) => event.cursor <= exported.throughCursor,
@@ -590,12 +964,15 @@ test("explicit JSON download follows all pages at a pinned export cursor", async
   expect(latest.throughCursor).toBeGreaterThan(exported.throughCursor);
 });
 
-test("lesson and clear-dialog controls work with the keyboard alone", async ({
+test("strategy lessons and clear-dialog controls work with the keyboard alone", async ({
   page,
+  request,
 }) => {
   await page.goto("/");
+  const first = allLessons(await getCatalog(request))[0]!;
   const start = page.getByRole("button", {
-    name: "Start Table flow and legal actions",
+    name: startName(first),
+    exact: true,
   });
   await expect(start).toBeEnabled();
   async function tabTo(target: import("@playwright/test").Locator) {
@@ -608,27 +985,48 @@ test("lesson and clear-dialog controls work with the keyboard alone", async ({
     }
     await expect(target).toBeFocused();
   }
-  await tabTo(start);
+  await start.focus();
   await page.keyboard.press("Enter");
+  const state = await readInstance(
+    request,
+    (await readProgress(request)).activeInstanceId!,
+  );
+  const question = state.question!;
   await expect(
-    page.getByRole("heading", { name: "No bet to match", exact: true }),
+    page.getByRole("heading", { name: question.title, exact: true }),
   ).toBeFocused();
-  const check = page.getByRole("radio", { name: "Check", exact: true });
-  await expect(check).toBeEnabled();
-  await tabTo(check);
-  await page.keyboard.press("Space");
-  await tabTo(page.getByRole("button", { name: "Submit answer", exact: true }));
+  const answerControl =
+    question.answerKind === "choice"
+      ? page.getByRole("radio").first()
+      : page.getByRole("spinbutton");
+  await expect(answerControl).toBeEnabled();
+  await tabTo(answerControl);
+  if (question.answerKind === "choice") await page.keyboard.press("Space");
+  else {
+    await page.keyboard.press("5");
+    await page.keyboard.press("0");
+  }
+  const submit = page.getByRole("button", {
+    name: "Submit answer",
+    exact: true,
+  });
+  await tabTo(submit);
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("heading", { name: "Correct", exact: true }),
+    page.getByRole("heading", { name: /^(Correct|Try this idea again)$/ }),
   ).toBeFocused();
   const next = page.getByRole("button", { name: "Continue lesson" });
   await expect(next).toBeEnabled();
   await tabTo(next);
   await page.keyboard.press("Enter");
-  await expect(
-    page.getByRole("heading", { name: "Match a bet", exact: true }),
-  ).toBeFocused();
+  await tabTo(
+    page
+      .getByRole("navigation", { name: "Main navigation" })
+      .getByRole("button", { name: "Progress", exact: true }),
+  );
+  await page.keyboard.press("Enter");
+  await tabTo(page.getByText("Learning path data", { exact: true }));
+  await page.keyboard.press("Enter");
   const clear = page.getByRole("button", {
     name: "Clear path progress",
     exact: true,
@@ -643,335 +1041,197 @@ test("lesson and clear-dialog controls work with the keyboard alone", async ({
 });
 
 for (const acknowledgement of ["presented", "feedback-shown"]) {
-  test(`failed ${acknowledgement} remains retryable after a successful download`, async ({
-    page,
-  }) => {
-    await page.goto("/");
-    const acks: unknown[] = [];
-    await page.route(`**/questions/*/${acknowledgement}`, async (route) => {
-      acks.push(route.request().postDataJSON());
-      if (acks.length === 1)
-        await route.fulfill({
-          status: 503,
-          json: { error: "Acknowledgement temporarily unavailable" },
-        });
-      else await route.continue();
-    });
-    await page
-      .getByRole("button", { name: "Start Table flow and legal actions" })
-      .click();
-    if (acknowledgement === "feedback-shown") {
-      await page.getByRole("radio", { name: "Check", exact: true }).check();
+  test(
+    "failed " +
+      acknowledgement +
+      " remains retryable after a successful download",
+    async ({ page, request }) => {
+      const first = allLessons(await getCatalog(request))[0]!;
+      await page.goto("/");
+      const acks: unknown[] = [];
+      await page.route("**/questions/*/" + acknowledgement, async (route) => {
+        acks.push(route.request().postDataJSON());
+        if (acks.length === 1)
+          await route.fulfill({
+            status: 503,
+            json: { error: "Acknowledgement temporarily unavailable" },
+          });
+        else await route.continue();
+      });
       await page
-        .getByRole("button", { name: "Submit answer", exact: true })
+        .getByRole("button", { name: startName(first), exact: true })
         .click();
-    }
-    await expect(page.getByRole("alert")).toContainText(
-      "Acknowledgement temporarily unavailable",
-    );
-    const downloaded = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Download path data" }).click();
-    await downloaded;
-    await expect(page.getByRole("alert")).toContainText(
-      "Acknowledgement temporarily unavailable",
-    );
-    await page.getByRole("button", { name: "Try again", exact: true }).click();
-    if (acknowledgement === "presented")
-      await expect(
-        page.getByRole("radio", { name: "Check", exact: true }),
-      ).toBeEnabled();
-    else
-      await expect(
-        page.getByRole("button", { name: "Continue lesson" }),
-      ).toBeEnabled();
-    expect(acks).toHaveLength(2);
-    expect(acks[1]).toEqual(acks[0]);
-  });
+      if (acknowledgement === "feedback-shown")
+        await answerCurrentQuestion(page);
+      await expect(page.getByRole("alert")).toContainText(
+        "Acknowledgement temporarily unavailable",
+      );
+      await pathData(page);
+      const downloaded = page.waitForEvent("download");
+      await page.getByRole("button", { name: "Download path data" }).click();
+      await downloaded;
+      await showLearn(page);
+      if (acknowledgement === "presented") {
+        const state = await readInstance(
+          request,
+          (await readProgress(request)).activeInstanceId!,
+        );
+        if (state.question?.answerKind === "choice")
+          await expect(page.getByRole("radio").first()).toBeEnabled();
+        else await expect(page.getByRole("spinbutton")).toBeEnabled();
+      } else {
+        await expect(
+          page.getByRole("button", { name: "Continue lesson" }),
+        ).toBeEnabled();
+      }
+      expect(acks).toHaveLength(2);
+      expect(acks[1]).toEqual(acks[0]);
+    },
+  );
 }
 
 for (const failedStep of ["delete", "refresh"]) {
-  test(`clear ${failedStep} failure has an accessible retry inside the modal`, async ({
-    page,
-  }) => {
-    await page.goto("/");
-    await expect(
-      page.getByRole("button", { name: "Start Table flow and legal actions" }),
-    ).toBeEnabled();
-    let failed = false;
-    await page.route(
-      /\/api\/v1\/learning-path\/progress(?:\?.*)?$/,
-      async (route) => {
-        if (
-          !failed &&
-          route.request().method() ===
-            (failedStep === "delete" ? "DELETE" : "GET")
-        ) {
-          failed = true;
-          await route.fulfill({
-            status: 503,
-            json: { error: "Clear operation temporarily unavailable" },
-          });
-        } else await route.continue();
-      },
-    );
-    const clear = page.getByRole("button", {
-      name: "Clear path progress",
-      exact: true,
-    });
-    await clear.click();
-    await page
-      .getByRole("button", { name: "Confirm clear path progress" })
-      .click();
-    const modal = page.getByRole("dialog");
-    await expect(modal.getByRole("alert")).toContainText(
-      "Clear operation temporarily unavailable",
-    );
-    await modal.getByRole("button", { name: "Retry clear progress" }).click();
-    await expect(modal).toHaveCount(0);
-    await expect(clear).toBeFocused();
-    await expect(page.getByText("0 answers attempted")).toBeVisible();
-  });
+  test(
+    "clear " + failedStep + " failure has an accessible retry inside the modal",
+    async ({ page, request }) => {
+      const first = allLessons(await getCatalog(request))[0]!;
+      await page.goto("/");
+      await expect(
+        page.getByRole("button", { name: startName(first), exact: true }),
+      ).toBeEnabled();
+      await pathData(page);
+      let failed = false;
+      await page.route(
+        failedStep === "delete"
+          ? /\/api\/v1\/learning-path\/progress(?:\?.*)?$/
+          : /\/api\/progress$/,
+        async (route) => {
+          if (
+            !failed &&
+            route.request().method() ===
+              (failedStep === "delete" ? "DELETE" : "GET")
+          ) {
+            failed = true;
+            await route.fulfill({
+              status: 503,
+              json: { error: "Clear operation temporarily unavailable" },
+            });
+          } else await route.continue();
+        },
+      );
+      const clear = page.getByRole("button", {
+        name: "Clear path progress",
+        exact: true,
+      });
+      await clear.click();
+      await page
+        .getByRole("button", { name: "Confirm clear path progress" })
+        .click();
+      const modal = page.getByRole("dialog");
+      await expect(modal.getByRole("alert")).toContainText(
+        "Clear operation temporarily unavailable",
+      );
+      await modal.getByRole("button", { name: "Retry clear progress" }).click();
+      await expect(modal).toHaveCount(0);
+      await expect(clear).toBeFocused();
+      await expect(
+        page.getByText(/0 lessons completed.*0 answers attempted/),
+      ).toBeVisible();
+    },
+  );
 }
 
-test("fresh-transfer results start at zero separately from engagement", async ({
-  page,
-}) => {
-  await page.goto("/");
-  await expect(
-    page.getByRole("region", { name: "Fresh transfer results", exact: true }),
-  ).toContainText("0/0 correct on first presentations");
-  await expect(
-    page.getByText(/0 lessons completed.*0 answers attempted/),
-  ).toBeVisible();
-  await expect(page.getByText(/not a mastery or speed score/)).toBeVisible();
-});
-
-test("four units teach visible assumptions and preserve review, repeat and fresh-transfer histories", async ({
-  page,
+test("generated strategy catalog contains five distinct strategic skills and seeded scenarios vary by instance", async ({
   request,
 }) => {
-  test.setTimeout(90000);
-  const base = "/api/v1/learning-path";
-  const course = await (await request.get(base)).json();
-  await page.goto("/");
-  for (const unit of course.units)
-    await expect(
-      page.getByRole("heading", { name: unit.title, exact: true }),
-    ).toBeVisible();
-  const answers: Record<string, string | number> = {
-    "free-check": "Check",
-    "facing-bet": "Call 10",
-    "minimum-raise": "30 total",
-    "next-street": "Deal the three-card flop",
-    "transfer-free": "Check",
-    "two-pair": "Two pair",
-    "flush-straight": "Flush",
-    "board-tie": "Tie: both play the board",
-    "transfer-full-house": "Full house",
-    "button-position": "Last",
-    "baseline-aces": "Raise according to the baseline",
-    "baseline-seven-two": "Fold according to the baseline",
-    "chart-limits": "It proves optimal poker play",
-    "transfer-kings": "Raise according to the baseline",
-    "call-price": 25,
-    "river-range": 50,
-    "conditional-call": "Call under the supplied assumptions",
-    "transfer-price": 33.333,
-    "flush-draw": "No, a four-heart flush draw",
-    "flush-outs": "9 hearts",
-    "next-card": 19.149,
-    "future-betting": "Yes, equity alone settles it",
-    "transfer-board-pair": "No, a full house or four of a kind can beat it",
-    "transfer-straight": 17.021,
-  };
-  const attempts: string[] = [];
-  const transfers: { id: string; fresh: boolean }[] = [];
-  let resumed = false;
-  async function finishCurrent(repeat = false) {
-    let state = await (
-      await request.get(
-        `${base}/instances/${(await (await request.get(`${base}/progress`)).json()).activeInstanceId}`,
-      )
-    ).json();
-    attempts.push(state.instanceId);
-    while (state.question) {
-      const question = state.question;
-      const heading = page.getByRole("heading", {
-        name: question.title,
-        exact: true,
-      });
-      await expect(heading).toBeVisible();
-      await expect(
-        page.getByRole("region", { name: "Path feedback" }),
-      ).toHaveCount(0);
-      expect(JSON.stringify(question)).not.toMatch(
-        /correctAnswer|gradingRule|explanation|takeaway/,
-      );
-      // Native details keeps its open state when React reuses the question view.
-      if (
-        !(await page
-          .getByText(question.assumptions[0], { exact: true })
-          .isVisible())
-      )
-        await page.getByText("Assumptions", { exact: true }).click();
-      for (const assumption of question.assumptions)
-        await expect(page.getByText(assumption, { exact: true })).toBeVisible();
-      if (state.contentId === "postflop-reasoning" && state.questionIndex === 0)
-        await expect(
-          page.getByText(
-            /After these foundations, try Bot table or Cash Decision Lab/,
-          ),
-        ).toBeVisible();
-      const transferNote = page.getByRole("note", {
-        name: "Transfer question",
-        exact: true,
-      });
-      if (question.isTransfer) {
-        transfers.push({ id: question.id, fresh: state.isFreshTransfer });
-        await expect(transferNote).toContainText(
-          state.isFreshTransfer
-            ? "Fresh transfer: first presentation"
-            : "Reused transfer: previously seen",
-        );
-        if (!state.isFreshTransfer) {
-          await expect(transferNote).toContainText(
-            "Reused variants do not change your fresh-transfer result.",
-          );
-          await page.screenshot({
-            path: test.info().outputPath(`reused-${question.id}.png`),
-            fullPage: true,
-          });
-        }
-      } else await expect(transferNote).toHaveCount(0);
-      if (repeat && question.id === "future-betting")
-        answers[question.id] =
-          "No, future betting and the opponent range matter";
-      const value = answers[question.id];
-      expect(value, `authored answer for ${question.id}`).toBeDefined();
-      if (typeof value === "number") {
-        await page.getByRole("spinbutton").fill(String(value));
-        if (!resumed) {
-          await page.reload();
-          await expect(heading).toBeFocused();
-          await expect(page.getByRole("spinbutton")).toHaveValue(String(value));
-          resumed = true;
-        }
-      } else
-        await page.getByRole("radio", { name: value, exact: true }).check();
-      await page
-        .getByRole("button", { name: "Submit answer", exact: true })
-        .click();
-      await expect(
-        page.getByRole("region", { name: "Path feedback" }),
-      ).toBeVisible();
-      await page.getByRole("button", { name: "Continue lesson" }).click();
-      await expect(heading).toHaveCount(0);
-      state = await (
-        await request.get(`${base}/instances/${state.instanceId}`)
-      ).json();
-    }
-    await expect(
-      page.getByRole("heading", { name: "Lesson complete", exact: true }),
-    ).toBeVisible();
-    return state;
-  }
-  for (const lesson of course.units.flatMap(
-    (unit: { lessons: { contentId: string; title: string }[] }) => unit.lessons,
-  )) {
-    await page
-      .getByRole("button", { name: `Start ${lesson.title}`, exact: true })
-      .click();
-    await finishCurrent();
-    const progress = await (await request.get(`${base}/progress`)).json();
-    if (lesson.contentId === "position-opening")
-      expect(progress.reviewSuggestion).toMatchObject({
-        contentId: "position-opening",
-        skillId: "position-opening",
-      });
-    if (lesson.contentId !== "postflop-reasoning")
-      await page
-        .getByRole("button", { name: "Back to path", exact: true })
-        .click();
-  }
-  for (let repeat = 0; repeat < 3; repeat++) {
-    const progress = await (await request.get(`${base}/progress`)).json();
-    expect(progress.reviewSuggestion).toMatchObject({
-      contentId: "postflop-reasoning",
-      skillId: "postflop-reasoning",
-    });
-    await expect(
-      page.getByText(
-        "Review the skill from your most recent incorrect answer.",
-        { exact: true },
-      ),
-    ).toBeVisible();
-    await page
-      .getByRole("button", { name: "Review missed ideas", exact: true })
-      .click();
-    const state = await finishCurrent(true);
-    expect(state.selectionReason).toMatch(repeat === 0 ? /unseen/i : /reused/i);
-  }
-  expect(new Set(attempts).size).toBe(8);
-  expect(transfers.slice(-3)).toEqual([
-    { id: "transfer-straight", fresh: true },
-    { id: "transfer-board-pair", fresh: false },
-    { id: "transfer-straight", fresh: false },
-  ]);
-  const progress = await (await request.get(`${base}/progress`)).json();
-  expect(progress).toMatchObject({
-    startedLessons: 8,
-    completedLessons: 8,
-    answerAttempts: 38,
-    transferAttempts: 6,
-    transferCorrect: 6,
-    resumedLessons: 1,
-  });
-  await expect(
-    page.getByText(/8 lessons completed.*38 answers attempted/),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("region", { name: "Fresh transfer results", exact: true }),
-  ).toContainText(
-    `${progress.transferCorrect}/${progress.transferAttempts} correct on first presentations`,
+  const catalog = await getCatalog(request);
+  const lessons = allLessons(catalog);
+  expect(catalog.title).toBe("Poker strategy");
+  expect(lessons.map((lesson) => lesson.contentId).sort()).toEqual(
+    [
+      "strategy-preflop",
+      "strategy-equity",
+      "strategy-postflop",
+      "strategy-ranges",
+      "strategy-betting",
+    ].sort(),
   );
-  await expect(page.getByText(/not a mastery or speed score/)).toBeVisible();
-  const exported = await (await request.get(`${base}/export`)).json();
-  expect(
-    exported.events.filter(
-      (event: { kind: string }) => event.kind === "lesson-opened",
-    ),
-  ).toHaveLength(8);
-  expect(
-    exported.events.filter(
-      (event: { kind: string }) => event.kind === "answer-submitted",
-    ),
-  ).toHaveLength(38);
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= innerWidth,
-    ),
-  ).toBe(true);
-  await page.screenshot({
-    path: test.info().outputPath("four-unit-review.png"),
-    fullPage: true,
+  const opened: {
+    contentId: string;
+    question: unknown;
+    feedback: unknown;
+    seed: number;
+    generator: string;
+  }[] = [];
+  const sessionId = crypto.randomUUID();
+  for (const lesson of lessons) {
+    const response = await request.post("/api/v1/learning-path/instances", {
+      data: {
+        eventId: crypto.randomUUID(),
+        instanceId: crypto.randomUUID(),
+        sessionId,
+        contentId: lesson.contentId,
+        contentVersion: catalog.contentVersion,
+        entryPoint: "path-selection",
+      },
+    });
+    expect(response.ok()).toBeTruthy();
+    const instance = await response.json();
+    expect(instance.contentId).toBe(lesson.contentId);
+    expect(instance.question).toBeTruthy();
+    expect(instance.question.skillId).toBe(lesson.skillId);
+    expect(instance.feedback).toBeNull();
+    expect(JSON.stringify(instance.question)).not.toMatch(
+      /correctAnswer|gradingRule|explanation|takeaway/,
+    );
+    const event = await openedEvent(request, instance.instanceId);
+    opened.push({
+      contentId: instance.contentId,
+      question: instance.question,
+      feedback: instance.feedback,
+      seed: event.payload.exerciseSeed,
+      generator: event.payload.generatorVersion,
+    });
+    expect(event.payload.generatorVersion).toEqual(expect.any(String));
+    expect(event.payload.exerciseSeed).toEqual(expect.any(Number));
+  }
+  const first = lessons[0]!;
+  const varied = await request.post("/api/v1/learning-path/instances", {
+    data: {
+      eventId: crypto.randomUUID(),
+      instanceId: crypto.randomUUID(),
+      sessionId,
+      contentId: first.contentId,
+      contentVersion: catalog.contentVersion,
+      entryPoint: "path-selection",
+    },
   });
+  expect(varied.ok()).toBeTruthy();
+  const variant = await varied.json();
+  const variantOpen = await openedEvent(request, variant.instanceId);
+  expect(variantOpen.payload.exerciseSeed).not.toBe(opened[0]!.seed);
+  expect(variant.question).not.toEqual(opened[0]!.question);
+  expect(new Set(opened.map((item) => item.seed)).size).toBe(lessons.length);
+  expect(opened.map((item) => item.contentId)).toEqual(
+    lessons.map((lesson) => lesson.contentId),
+  );
 });
 
-test("experienced players can enter bot and cash practice before completing a lesson", async ({
+test("experienced players can enter bot and cash practice before completing a strategy skill", async ({
   page,
   request,
 }) => {
   await page.goto("/");
   await page
     .getByRole("navigation", { name: "Main navigation" })
-    .getByRole("button", { name: "Bot table", exact: true })
+    .getByRole("button", { name: "Play", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "Bot table", exact: true }),
   ).toBeVisible();
   await page
     .getByRole("navigation", { name: "Main navigation" })
-    .getByRole("button", { name: "Learn", exact: true })
+    .getByRole("button", { name: "Practice", exact: true })
     .click();
   await page
     .getByRole("button", { name: "Open online cash Decision Lab", exact: true })
@@ -982,8 +1242,151 @@ test("experienced players can enter bot and cash practice before completing a le
       exact: true,
     }),
   ).toBeVisible();
+  expect((await readProgress(request)).startedLessons).toBe(0);
+});
+
+test("back to course preserves the active strategy draft and feedback across pause and reload", async ({
+  page,
+  request,
+}) => {
+  const first = allLessons(await getCatalog(request))[0]!;
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Start today's practice", exact: true })
+    .click();
+  let state = await readInstance(
+    request,
+    (await readProgress(request)).activeInstanceId!,
+  );
+  const question = state.question!;
+  const heading = page.getByRole("heading", {
+    name: question.title,
+    exact: true,
+  });
+  await expect(heading).toBeFocused();
+  await expect(
+    page.getByRole("heading", { name: "Poker strategy", exact: true }),
+  ).toHaveCount(0);
+  await chooseAnyAnswer(page);
+  const before = await (
+    await request.get("/api/v1/learning-path/export")
+  ).json();
+  const saved = await page.evaluate(() =>
+    localStorage.getItem("poker-learning-path-v1"),
+  );
+  await page
+    .getByRole("button", { name: "Back to course", exact: false })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Poker strategy", exact: true }),
+  ).toBeFocused();
+  const resumeRow = page.getByRole("button", {
+    name: resumeName(first),
+    exact: true,
+  });
+  await expect(resumeRow).toContainText("In progress");
+  await expect(resumeRow).toHaveAttribute("aria-current", "step");
+  await resumeRow.click();
+  await expect(heading).toBeFocused();
+  if (question.answerKind === "choice")
+    await expect(page.getByRole("radio").first()).toBeChecked();
+  else await expect(page.getByRole("spinbutton")).toHaveValue("50");
   expect(
-    (await (await request.get("/api/v1/learning-path/progress")).json())
-      .startedLessons,
-  ).toBe(0);
+    await page.evaluate(() => localStorage.getItem("poker-learning-path-v1")),
+  ).toBe(saved);
+  expect(
+    (await (await request.get("/api/v1/learning-path/export")).json()).events,
+  ).toEqual(before.events);
+  await page
+    .getByRole("button", { name: "Submit answer", exact: true })
+    .click();
+  const feedback = page.getByRole("heading", {
+    name: /^(Correct|Try this idea again)$/,
+  });
+  await expect(feedback).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Continue lesson", exact: true }),
+  ).toBeEnabled();
+  await page
+    .getByRole("button", { name: "Back to course", exact: false })
+    .click();
+  await page
+    .getByRole("button", { name: "Resume today's practice", exact: true })
+    .click();
+  await expect(feedback).toBeFocused();
+  await page
+    .getByRole("button", { name: "Continue lesson", exact: true })
+    .click();
+  state = await readInstance(request, state.instanceId);
+  if (state.question) {
+    await expect(
+      page.getByRole("heading", { name: state.question.title, exact: true }),
+    ).toBeFocused();
+    await chooseAnyAnswer(page);
+    await page
+      .getByRole("button", { name: "Back to course", exact: false })
+      .click();
+    await page.reload();
+    const recovered = await readInstance(request, state.instanceId);
+    expect(recovered.question).toEqual(state.question);
+    await expect(
+      page.getByRole("heading", { name: state.question.title, exact: true }),
+    ).toBeFocused();
+  }
+});
+
+test("daily course completion reports progress independently of the generated answer values", async ({
+  page,
+  request,
+}) => {
+  const first = allLessons(await getCatalog(request))[0]!;
+  await page.goto("/");
+  const daily = page.getByRole("region", {
+    name: "Today's practice",
+    exact: true,
+  });
+  await page
+    .getByRole("button", { name: "Start today's practice", exact: true })
+    .click();
+  await finishCurrentLesson(page, request);
+  await page.getByRole("button", { name: "Back to path", exact: true }).click();
+  await expect(daily).toContainText("Completed today");
+  await expect(daily).toContainText("1-day practice streak");
+  await expect(daily).toContainText(
+    allLessons(await getCatalog(request))[1]!.title,
+  );
+  const progress = await readProgress(request);
+  expect(progress.completedContentIds).toEqual([first.contentId]);
+  expect(progress.completedLessons).toBe(1);
+  expect(progress.answerAttempts).toBeGreaterThan(0);
+  expect(progress.completedToday).toBe(true);
+  expect(progress.currentStreakDays).toBe(1);
+  await page.reload();
+  await expect(daily).toContainText("Completed today");
+  await expect(daily).toContainText("1-day practice streak");
+});
+
+test("lesson and clear-dialog flow remains keyboard accessible with focus return", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/");
+  const clearTarget = page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Progress", exact: true });
+  await clearTarget.focus();
+  await page.keyboard.press("Enter");
+  await page.getByText("Learning path data", { exact: true }).click();
+  const clear = page.getByRole("button", {
+    name: "Clear path progress",
+    exact: true,
+  });
+  await clear.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("button", { name: "Keep progress" }),
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(clear).toBeFocused();
+  expect((await readProgress(request)).completedLessons).toBe(0);
 });
