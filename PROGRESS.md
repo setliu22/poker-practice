@@ -1,12 +1,12 @@
-# Strategy-first daily practice — 2026-10-23 (active)
+# Strategy-first daily practice — 2026-10-23 (complete)
 
-Branch `codex/poker-learning-path`, HEAD `53e74b9`, active feature worktree `/Users/a../.codex/worktrees/poker-learning-path/poker-practice`. User clarified that they know the rules and Learn / Daily Practice should generate fresh strategic situations with one defensible best answer. Keep old version-1 attempts readable; new skill IDs must not collide with legacy completion history. No plugins, no mobile product, no learner-data reset.
+Branch `codex/poker-learning-path`, HEAD `1e465b3`, published to `origin/codex/poker-learning-path` at the same SHA. User clarified that they know the rules and Learn / Daily Practice should generate fresh strategic situations with one defensible best answer. Keep old version-1 attempts readable; new skill IDs must not collide with legacy completion history. No plugins, no mobile product, no learner-data reset.
 
 The approved spec and implementation plan describe five strategy skills (preflop/chart baseline, pot price/equity, postflop decisions, ranges/blockers, betting EV) with seeded generated scenarios and local event provenance. Stable skill objectives organize the course; each new attempt gets a newly seeded situation set. The daily action, review, path selection, and repeat flows all carry their entry point into the event ledger. Existing version-1 lessons remain replayable.
 
 Migration 014 and database setup preserve old event payloads, answer receipts, foreign keys, and the cursor high-water mark. Replay now checks the saved generator version before reconstructing questions. Fresh-transfer fingerprints use scenario facts, not per-session question slot IDs, so an identical generated situation does not count as novel. The standalone-backup fixture expects schema 14. The learner database was not reset or used for migration tests.
 
-Final verification: full serial Vitest **434 passed, 2 optional skips**; focused content/API/backup suites **58/58 passed**; generated-course desktop Playwright suite **21/21 passed**; TypeScript, Vite, API, and worker production builds passed; `git diff --check` passed. `/api/health` returned `{"status":"ok"}` at `http://127.0.0.1:5173/`. The independent review findings on unsupported generator replay and duplicate-scenario fingerprints were fixed and covered by regressions. No plugins or mobile product work were used.
+Final verification: full serial Vitest **434 passed, 2 optional skips**; focused content/API/backup suites **58/58 passed**; generated-course desktop Playwright suite **21/21 passed**; TypeScript, Vite, API, and worker production builds passed; `git diff --check` passed. `/api/health` returned `{"status":"ok"}` at `http://127.0.0.1:5173/`. The independent review findings on unsupported generator replay and duplicate-scenario fingerprints were fixed and covered by regressions. No plugins or mobile product work were used. GitHub Actions `Verify` run [40013639949](https://github.com/setliu22/poker-practice/actions/runs/40013639949) was in progress at handoff.
 
 # Simulator response error — 2026-10-23 (complete)
 
@@ -20,9 +20,9 @@ Evidence: regression first failed on label overflow, then passed at300/320/480/6
 
 # Current handoff
 
-## Narrow browser-panel fix — 2026-10-19 (complete)
+## Strategy-first daily practice — 2026-10-23 (complete)
 
-Fixed the attached screenshot's character-by-character daily-card heading. The status column's intrinsic width squeezed the heading to zero; a container query now stacks card content below620px course width and retains wider two-column layout. Desktop-browser resize regression failed before fix, then passed at320/480/640/1280px with readable heading dimensions and button containment. Corrected320px screenshot inspected. Final course browser suite **19/19 passed in29.2sec**, build and final formatting/diff checks passed. Live5173 serves the new container CSS. Small CSS-only fix self-reviewed; no plugins, new workers or learner-data changes. Historical mobile-table suites remain excluded.
+Generated strategy practice, simulator error recovery, UI refinements, regression tests, and current docs are committed as `1e465b3` and pushed to `origin/codex/poker-learning-path`; verified with `git ls-remote`. GitHub Actions run 40013639949 was in progress at handoff. Full verification evidence and feature details are recorded above. Next action: inspect the Actions run result; no PR was created.
 
 ## Copy cleanup — 2026-10-19 (complete)
 
